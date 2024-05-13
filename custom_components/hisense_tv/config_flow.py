@@ -93,6 +93,7 @@ class HisenseTvFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data_schema=vol.Schema(
                     {
                         vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
+                        vol.Required(CONF_CLIENT_ID, default=DEFAULT_CLIENT_ID): str,
                         vol.Required(CONF_MAC): str,
                         vol.Optional(CONF_IP_ADDRESS): str,
                         vol.Optional(CONF_MQTT_IN, default=DEFAULT_MQTT_PREFIX): str,
