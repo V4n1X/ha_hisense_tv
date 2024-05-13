@@ -112,7 +112,7 @@ class HisenseTvFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_CLIENT_ID: user_input.get(CONF_CLIENT_ID),
         }
 
-        await self._check_authentication(client_id=CLIENT_ID)
+        await self._check_authentication(client_id=CONF_CLIENT_ID)
 
         return self.async_show_progress(
             step_id="user",
