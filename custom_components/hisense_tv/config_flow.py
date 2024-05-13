@@ -1,5 +1,4 @@
 """Hisense TV config flow."""
-import asyncio
 import json
 from json.decoder import JSONDecodeError
 import logging
@@ -28,8 +27,8 @@ class HisenseTvFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Hisense TV config flow."""
 
     VERSION = 1
-    task_mqtt = asyncio.Task | None = None
-    task_auth = asyncio.Task | None = None
+    task_mqtt = None
+    task_auth = None
 
     def __init__(self):
         """Initialize the config flow."""
