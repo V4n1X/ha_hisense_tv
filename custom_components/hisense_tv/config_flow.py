@@ -79,12 +79,12 @@ class HisenseTvFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input=None) -> FlowResult:
         if self.task_auth is True:
             _LOGGER.debug("async_step_user - task_auth is True")
-            return self.async_show_progress_done(next_step_id="finish", progress_task=self.task_auth)
+            return self.async_show_progress_done(next_step_id="finish")
 
         if self.task_auth is False:
             self.task_auth = None
             _LOGGER.debug("async_step_user - task_auth is False")
-            return self.async_show_progress_done(next_step_id="auth", progress_task=self.task_auth)
+            return self.async_show_progress_done(next_step_id="auth")
 
         if user_input is None:
             _LOGGER.debug("async_step_user - user_input is None")
