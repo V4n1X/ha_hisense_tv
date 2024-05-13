@@ -7,12 +7,13 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.components import mqtt
-from homeassistant.const import CONF_IP_ADDRESS, CONF_MAC, CONF_NAME, CONF_PIN
+from homeassistant.const import CONF_IP_ADDRESS, CONF_MAC, CONF_NAME, CONF_PIN, CONF_CLIENT_ID
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_MQTT_IN,
     CONF_MQTT_OUT,
+    CONF_CLIENT_ID,
     DEFAULT_CLIENT_ID,
     DEFAULT_MQTT_PREFIX,
     DEFAULT_NAME,
@@ -107,6 +108,7 @@ class HisenseTvFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_IP_ADDRESS: user_input.get(CONF_IP_ADDRESS),
             CONF_MQTT_IN: user_input.get(CONF_MQTT_IN),
             CONF_MQTT_OUT: user_input.get(CONF_MQTT_OUT),
+            CONF_CLIENT_ID: user_input.get(CONF_CLIENT_ID),
         }
 
         await self._check_authentication(client_id=DEFAULT_CLIENT_ID)
