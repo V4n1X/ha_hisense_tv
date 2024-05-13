@@ -5,7 +5,7 @@ import logging
 from homeassistant.components import mqtt
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 
-from .const import DEFAULT_CLIENT_ID
+from .const import CONF_CLIENT_ID, DEFAULT_CLIENT_ID
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class HisenseTvBase(object):
         uid: str,
         ip_address: str,
     ):
-        self._client = DEFAULT_CLIENT_ID
+        self._client = CONF_CLIENT_ID or DEFAULT_CLIENT_ID
         self._hass = hass
         self._name = name
         self._mqtt_in = mqtt_in or ""
