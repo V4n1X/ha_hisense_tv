@@ -176,7 +176,7 @@ class HisenseTvFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
         else:
             _LOGGER.debug("async_step_auth send authentication: %s", user_input)
-            client_id = CLIENT_ID
+            client_id = CONF_CLIENT_ID
             self._unsubscribe_auth = await mqtt.async_subscribe(
                 hass=self.hass,
                 topic="%s/remoteapp/mobile/%s/ui_service/data/authenticationcode"
