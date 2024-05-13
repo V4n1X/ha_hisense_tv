@@ -1,4 +1,7 @@
 """Hisense TV config flow."""
+
+import asyncio
+
 import json
 from json.decoder import JSONDecodeError
 import logging
@@ -29,6 +32,8 @@ class HisenseTvFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     task_mqtt = None
     task_auth = None
+
+    progress_task: asyncio.Task | None = None
 
     def __init__(self):
         """Initialize the config flow."""
@@ -103,7 +108,7 @@ class HisenseTvFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         _LOGGER.debug("async_step_user - set task_mqtt")
-        init_task_mqtt = {
+        self.task_mqtt = {
             CONF_MAC: user_input.get(CONF_MAC),
             CONF_NAME: user_input.get(CONF_NAME),
             CONF_IP_ADDRESS: user_input.get(CONF_IP_ADDRESS),
@@ -111,13 +116,17 @@ class HisenseTvFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_MQTT_OUT: user_input.get(CONF_MQTT_OUT),
             CONF_CLIENT_ID: user_input.get(CONF_CLIENT_ID),
         }
-        self.task_mqtt = self.hass.async_create_task(init_task_mqtt)
 
+   
         await self._check_authentication(client_id=CONF_CLIENT_ID)
+
+        coro_one = asyncio.sleep(2)
+
+        self.progress_task = self.hass.async_create_task(coro_one)
 
         return self.async_show_progress(
             progress_action="progress_action",
-            progress_task=self.task_mqtt
+            progress_task=self.progress_task
         )
 
     async def _check_authentication(self, client_id):
@@ -151,8 +160,7 @@ class HisenseTvFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reauth(self, user_input=None):
         """Reauth handler."""
         _LOGGER.debug("async_step_reauth: %s", user_input)
-        init_task_auth = None
-        self.task_auth = self.hass.async_create_task(init_task_auth)
+        self.task_auth = None
         return await self.async_step_auth(user_input=user_input)
 
     async def async_step_auth(self, user_input=None):
@@ -192,9 +200,14 @@ class HisenseTvFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 % (self.task_mqtt.get(CONF_MQTT_OUT), client_id),
                 payload=payload,
             )
+
+            coro_two = asyncio.sleep(2)
+
+            self.progress_task = self.hass.async_create_task(coro_two)
+            
             return self.async_show_progress(
                 progress_action="progress_action",
-                progress_task=self.task_auth
+                progress_task=self.progress_task
             )
 
     async def async_step_finish(self, user_input=None):
