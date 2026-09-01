@@ -12,7 +12,7 @@ Custom integration that controls Hisense Vidaa TVs via the **MQTT broker embedde
 
 ## Features
 
-- **media_player** — On/Off, volume set/mute, Play/Pause/Stop, Next/Previous track, source selection (HDMI/TV/…)
+- **media_player** — On/Off, volume set/mute, Play/Pause/Stop, Next/Previous track, source selection (HDMI/TV/…) **plus installed apps** — selecting an app in the source selector launches it on the TV
 - **remote** — all 60+ remote keys via `remote.send_command`
 - **Sensors** — volume (%), active source, TV state (`sourceswitch`, `app`, `livetv`, … incl. fake sleep/screen state) + diagnostic attributes (firmware, chip platform, capabilities)
 - **Auto-discovery** — SSDP-based (like the app), plus a manual network scan during setup and IP repair via DHCP/MAC
@@ -154,6 +154,12 @@ The reverse-engineering community this project builds upon:
 - [d3nd3/Hisense-mqtt-keyfiles](https://github.com/d3nd3/Hisense-mqtt-keyfiles)
 
 ## Changelog
+
+### 1.3.4
+
+**New**
+
+- **Installed TV apps in the source selector:** the media player's source list now combines HDMI/TV inputs **and the apps installed on the TV** — selecting an app (e.g. *Netflix*) launches it via the protocol's `launchapp` action. The app list is actively requested on every reconnect (same robust mechanics as the source list: throttled retries, dedupe, defensive parsing of firmware-specific JSON variants) and was previously received but unused
 
 ### 1.3.3
 

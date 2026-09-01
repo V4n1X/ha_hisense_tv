@@ -26,6 +26,7 @@ from .const import (
     CONF_TV_VERSION,
     DEFAULT_NAME,
     DISPATCH_APP_VERSION,
+    DISPATCH_APPS,
     DISPATCH_CAPABILITY,
     DISPATCH_CONNECTION,
     DISPATCH_PAIRING_REQUIRED,
@@ -96,6 +97,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
             await client.request_capability()
             await client.request_app_version()
             await client.request_source_list()
+            await client.request_app_list()
         except Exception as ex:  # noqa: BLE001 - must never break the connection loop
             _LOGGER.debug("%s: metadata request failed: %s", entry.title, ex)
 
@@ -123,6 +125,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
             runtime.state.apply_sources(payload)
             changed = True
             _LOGGER.debug("%s: source list updated (%d entries)", entry.title, len(payload))
+        elif name == DISPATCH_APPS and isinstance(payload, list):
+            changed = runtime.state.apply_apps(payload)
+            _LOGGER.debug("%s: app list updated (%d entries)", entry.title, len(payload))
         elif name == DISPATCH_CONNECTION:
             runtime.state.connected = bool(payload)
             if payload:

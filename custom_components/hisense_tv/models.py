@@ -58,6 +58,65 @@ class SourceInfo:
 
 
 @dataclass(slots=True)
+class AppInfo:
+    """One entry of a ui_service/applist response (installed TV apps).
+
+    The exact wire format is reverse engineered and varies between firmware
+    generations, so parsing is deliberately defensive: dicts with any known
+    key spelling are accepted, plain strings are treated as app names with a
+    derived launch url, and anything else is skipped.
+    """
+
+    name: str
+    url: str = ""
+    url_type: int = 37
+    store_type: int = 0
+
+    @classmethod
+    def parse(cls, data: Any) -> AppInfo | None:
+        if isinstance(data, str):
+            name = data.strip()
+            return cls(name=name, url=name.lower().replace(" ", "")) if name else None
+        if not isinstance(data, dict):
+            return None
+
+        def _first(*keys: str) -> str:
+            for key in keys:
+                value = data.get(key)
+                if value is not None and str(value).strip():
+                    return str(value).strip()
+            return ""
+
+        name = _first("name", "appName", "app_name", "displayname")
+        if not name:
+            return None
+        url = _first("url", "appUrl", "app_url") or name.lower().replace(" ", "")
+        return cls(
+            name=name,
+            url=url,
+            url_type=_to_int(data.get("urlType", data.get("url_type")), 37),
+            store_type=_to_int(data.get("storeType", data.get("store_type")), 0),
+        )
+
+    @classmethod
+    def parse_list(cls, payload: str | bytes | None) -> list[AppInfo]:
+        data = _loads(payload)
+        if isinstance(data, dict):
+            # Some firmwares wrap the list: {"applist": [...]} / {"data": [...]}
+            data = next((v for v in data.values() if isinstance(v, list)), None)
+        if not isinstance(data, list):
+            return []
+        apps: list[AppInfo] = []
+        seen: set[str] = set()
+        for item in data:
+            app = cls.parse(item)
+            if app is not None and app.name.lower() not in seen:
+                seen.add(app.name.lower())
+                apps.append(app)
+        return apps
+
+
+@dataclass(slots=True)
 class VolumeUpdate:
     """platform_service volume feedback.
 
@@ -177,6 +236,7 @@ class TvState:
     source_id: str | None = None
     source_name: str | None = None
     source_list: list[SourceInfo] = field(default_factory=list)
+    app_list: list[AppInfo] = field(default_factory=list)
     tv_state: str | None = None
     screen_on: bool | None = None
     capability: CapabilityInfo | None = None
@@ -222,6 +282,12 @@ class TvState:
 
     def apply_sources(self, sources: list[SourceInfo]) -> bool:
         self.source_list = sources
+        return True
+
+    def apply_apps(self, apps: list[AppInfo]) -> bool:
+        if apps == self.app_list:
+            return False
+        self.app_list = apps
         return True
 
     def current_source(self) -> SourceInfo | None:

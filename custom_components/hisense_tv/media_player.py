@@ -100,7 +100,9 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
 
     @property
     def source_list(self) -> list[str]:
-        return [source.label for source in self._tv_state.source_list]
+        names = [source.label for source in self._tv_state.source_list]
+        names.extend(app.name for app in self._tv_state.app_list)
+        return names
 
     async def _send(self, key: str) -> None:
         await self._client.send_key(key)
@@ -171,6 +173,10 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
         for item in self._tv_state.source_list:
             if item.label == source:
                 await self._client.select_source(item.sourceid)
+                return
+        for app in self._tv_state.app_list:
+            if app.name == source:
+                await self._client.launch_app(app.url, app.name, app.url_type, app.store_type)
                 return
         _LOGGER.warning("Unknown source %s", source)
 

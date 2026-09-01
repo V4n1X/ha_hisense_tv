@@ -22,6 +22,7 @@ from typing import Any, Callable
 
 from .const import (
     ACTION_APP_VERSION,
+    ACTION_APP_LIST,
     ACTION_AUTHENTICATION_CODE,
     ACTION_AUTHENTICATION_CODE_CLOSE,
     ACTION_CAPABILITY,
@@ -70,6 +71,7 @@ from .const import (
 )
 from .discovery import async_send_wol
 from .models import (
+    AppInfo,
     AuthenResult,
     CapabilityInfo,
     SourceInfo,
@@ -340,7 +342,7 @@ class HisenseTvClient:
         elif function == TOPIC_FUNC_SOURCE_LIST:
             self._emit(DISPATCH_SOURCES, SourceInfo.parse_list(text))
         elif function == TOPIC_FUNC_APP_LIST:
-            self._emit(DISPATCH_APPS, text)
+            self._emit(DISPATCH_APPS, AppInfo.parse_list(text))
         elif function == TOPIC_FUNC_PAIRING_REQUIRED:
             self._emit(DISPATCH_PAIRING_REQUIRED, text)
         elif function == TOPIC_FUNC_AUTH_RESULT:
@@ -388,6 +390,9 @@ class HisenseTvClient:
 
     async def get_tv_state(self) -> bool:
         return await self._publish(SERVICE_UI, ACTION_GET_TV_STATE, "")
+
+    async def request_app_list(self) -> bool:
+        return await self._publish(SERVICE_UI, ACTION_APP_LIST, "")
 
     async def request_source_list(self) -> bool:
         return await self._publish(SERVICE_UI, ACTION_SOURCE_LIST, "")
