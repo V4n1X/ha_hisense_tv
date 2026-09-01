@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
@@ -22,8 +21,6 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# Time the TV gets to push fresh values after a poll request.
-_SETTLE_SECONDS = 1.0
 
 
 @dataclass(slots=True)
@@ -79,10 +76,11 @@ class HisenseTvCoordinator(DataUpdateCoordinator["TvState"]):
         except NotConnected:
             _LOGGER.debug("%s: poll lost connection - waiting for reconnect", self.name)
             return self.state
-        # Give the TV a moment to answer before listeners read the snapshot.
-        await asyncio.sleep(_SETTLE_SECONDS)
+        # Push-first protocol: the poll only triggers fresh values; the TV's
+        # push feedback updates the shared state and wakes listeners via the
+        # event callback, so no settle sleep is needed here.
         _LOGGER.debug(
-            "%s: poll done (tv_state=%s volume=%s sources=%d)",
+            "%s: poll requested (tv_state=%s volume=%s sources=%d)",
             self.name,
             self.state.tv_state,
             self.state.volume_level,

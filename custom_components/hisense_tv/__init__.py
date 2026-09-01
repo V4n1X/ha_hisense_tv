@@ -15,16 +15,12 @@ from typing import TYPE_CHECKING
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 
 from .const import (
-    CONF_MAC_ETHERNET,
-    CONF_MAC_WIFI,
     CONF_MODEL_NAME,
     CONF_PLATFORM_VERSION,
     CONF_TV_VERSION,
-    CONF_UUID,
     DEFAULT_NAME,
     DISPATCH_APP_VERSION,
     DISPATCH_CAPABILITY,
@@ -37,12 +33,14 @@ from .const import (
     MANUFACTURER,
 )
 from .coordinator import HisenseTvCoordinator, RuntimeData
-from .data import CannotConnect, HisenseTvClient, default_client_cert_path
-from .discovery import format_mac
+from .data import HisenseTvClient, default_client_cert_path
+from .entity import device_connections, entry_unique_id
 from .models import CapabilityInfo, StateUpdate, TvState
 
 _LOGGER = logging.getLogger(__name__)
 
+# Note: repairs is NOT an entity platform. HA calls the module-level
+# async_create_fix_flow() in repairs.py directly; no forwarding needed.
 PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,
     Platform.REMOTE,
@@ -61,48 +59,6 @@ else:
 def bundled_client_cert() -> Path | None:
     """Bundled RemoteNOW client certificate (mutual TLS on newer models)."""
     return default_client_cert_path()
-
-
-def entry_unique_id(entry: ConfigEntry) -> str:
-    """Stable unique id: explicit uuid, else MAC, else host."""
-    return str(
-        entry.data.get(CONF_UUID)
-        or entry.data.get(CONF_MAC_WIFI)
-        or entry.data.get(CONF_MAC_ETHERNET)
-        or f"{entry.data.get('host')}:{entry.data.get('port', 36669)}"
-    )
-
-
-def device_connections(entry: ConfigEntry) -> set[tuple[str, str]]:
-    connections: set[tuple[str, str]] = set()
-    for key in (CONF_MAC_WIFI, CONF_MAC_ETHERNET):
-        mac = entry.data.get(key)
-        if mac:
-            connections.add((dr.CONNECTION_NETWORK_MAC, format_mac(str(mac))))
-    return connections
-
-
-def build_device_info(entry: ConfigEntry) -> dr.DeviceInfo:
-    """Shared DeviceInfo so every entity lands on one registry device."""
-    data = entry.data
-    model = str(data.get(CONF_MODEL_NAME) or "").strip() or DEFAULT_NAME
-    sw_version = str(data[CONF_TV_VERSION]) if data.get(CONF_TV_VERSION) else None
-    hw_version = f"platform {data[CONF_PLATFORM_VERSION]}" if data.get(CONF_PLATFORM_VERSION) else None
-    runtime: RuntimeData | None = getattr(entry, "runtime_data", None)
-    if runtime is not None and runtime.state.capability:
-        cap = runtime.state.capability
-        if not hw_version and cap.chip_platform:
-            hw_version = f"chip {cap.chip_platform}"
-
-    return dr.DeviceInfo(
-        identifiers={(DOMAIN, entry_unique_id(entry))},
-        manufacturer=MANUFACTURER,
-        model=model,
-        name=entry.title or DEFAULT_NAME,
-        connections=device_connections(entry),
-        sw_version=sw_version,
-        hw_version=hw_version,
-    )
 
 
 def _register_device(hass: HomeAssistant, entry: HisenseConfigEntry) -> None:
@@ -170,6 +126,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
             if now - _last_reauth_request > 60:
                 _last_reauth_request = now
                 _LOGGER.info("%s: TV requests pairing - starting reauth flow", entry.title)
+                from .repairs import async_create_pairing_lost_issue  # noqa: PLC0415
+
+                async_create_pairing_lost_issue(hass, entry)
                 entry.async_start_reauth(hass)
             return
 
@@ -189,12 +148,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
     runtime = RuntimeData(client=client, coordinator=coordinator, state=state)
     entry.runtime_data = runtime  # before start(): early events need runtime
 
-    try:
-        await client.start()
-    except CannotConnect as err:
-        await client.stop()
-        entry.runtime_data = None
-        raise ConfigEntryNotReady(str(err)) from err
+    # A TV that is powered off is *not* a setup error: its MQTT broker is
+    # simply gone. Complete setup anyway so Wake-on-LAN can turn the TV on;
+    # the reconnect loop retries in the background and entities report
+    # unavailable via client.connected until the TV answers again.
+    await client.start(allow_offline=True)
+    if not client.connected:
+        _LOGGER.warning(
+            "%s: TV unreachable at %s:%s - setup continues offline, "
+            "entities stay unavailable until the TV reconnects",
+            entry.title,
+            entry.data.get("host"),
+            entry.data.get("port", 36669),
+        )
 
     _register_device(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -230,7 +196,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
             except Exception as ex:  # noqa: BLE001
                 _LOGGER.debug("%s: background metadata enrichment: %s", entry.title, ex)
 
-        hass.async_create_task(_async_background_metadata_enrichment())
+        # async_create_background_task keeps the task reference on the entry
+        # (HA >= 2024.3) so it cannot be garbage-collected mid-flight.
+        entry.async_create_background_task(
+            hass,
+            _async_background_metadata_enrichment(),
+            "hisense_tv_metadata_enrichment",
+        )
 
     return True
 
@@ -262,7 +234,7 @@ def _refresh_device_metadata(hass: HomeAssistant, entry: HisenseConfigEntry) -> 
 
 async def async_unload_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> bool:
     """Unload platforms and close the MQTT connection cleanly."""
-    unload_ok = await hass.config_entries.async_forward_entry_unload(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     runtime: RuntimeData | None = getattr(entry, "runtime_data", None)
     if runtime is not None:
         await runtime.client.stop()

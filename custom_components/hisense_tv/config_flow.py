@@ -14,8 +14,16 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import callback
+from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 
+from .button import BUTTON_DESCRIPTIONS
 from .const import (
+    CONF_BUTTONS,
     CONF_COMMAND_DELAY,
     CONF_COUNTRY,
     CONF_ENABLE_WOL,
@@ -31,6 +39,7 @@ from .const import (
     CONF_UDN,
     CONF_USE_TLS,
     CONF_UUID,
+    DEFAULT_BUTTONS,
     DEFAULT_COMMAND_DELAY,
     DEFAULT_ENABLE_WOL,
     DEFAULT_NAME,
@@ -216,6 +225,9 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
             if not self._friendly_name and entry.data.get(CONF_NAME):
                 merged[CONF_NAME] = entry.data.get(CONF_NAME)
             self.hass.config_entries.async_update_entry(entry, data=merged)
+            from .repairs import async_delete_pairing_lost_issue  # noqa: PLC0415
+
+            async_delete_pairing_lost_issue(self.hass, entry.entry_id)
             await self.hass.config_entries.async_reload(entry.entry_id)
             return self.async_abort(reason="reauth_successful")
 
@@ -451,21 +463,27 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_dhcp(self, discovery_info: Any) -> ConfigFlowResult:
+        """DHCP discovery: cheap metadata lookup only, no MQTT probe.
+
+        Discovery steps should return fast; the full connection probe (and any
+        pairing) happens on the confirm step when the user accepts.
+        """
         host = getattr(discovery_info, "ip", None)
         if not host:
             return self.async_abort(reason="not_hisense")
         self._host = str(host)
         self._port = DEFAULT_PORT
-        try:
-            result = await self._validate()
-        except CannotConnect:
-            return self.async_abort(reason="cannot_connect")
-        except PairingRequired:
-            self.context["title_placeholders"] = {"name": self._host}
-            return self.async_show_form(step_id="pairing", data_schema=_pin_schema(), errors={})
-        if result != "ok":
-            return self.async_abort(reason="cannot_connect")
-        return await self._finish()
+        # Best-effort SSDP metadata enrichment (bounded, non-fatal).
+        tv = await self._lookup_metadata()
+        if tv is not None:
+            self._discovered = tv
+            self._port = tv.mqtt_port or self._port
+            self._use_tls = tv.use_tls
+            self._friendly_name = tv.name
+        else:
+            self._friendly_name = f"Hisense TV ({self._host})"
+        self.context["title_placeholders"] = {"name": self._friendly_name}
+        return await self.async_step_confirm()
 
     async def async_step_reconfirm(self, discovery_info: Any) -> ConfigFlowResult:
         """A registered TV reappeared under a different IP address."""
@@ -557,6 +575,10 @@ class HisenseTvOptionsFlowHandler(OptionsFlowWithReload):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
         options = self.config_entry.options
+        button_options = [
+            SelectOptionDict(value=description.key, label=description.label)
+            for description in BUTTON_DESCRIPTIONS
+        ]
         schema = vol.Schema(
             {
                 vol.Required(
@@ -571,6 +593,16 @@ class HisenseTvOptionsFlowHandler(OptionsFlowWithReload):
                     CONF_COMMAND_DELAY,
                     default=options.get(CONF_COMMAND_DELAY, DEFAULT_COMMAND_DELAY),
                 ): vol.All(vol.Coerce(int), vol.Range(min=0, max=500)),
+                vol.Required(
+                    CONF_BUTTONS,
+                    default=list(options.get(CONF_BUTTONS, DEFAULT_BUTTONS)),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=button_options,
+                        multiple=True,
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

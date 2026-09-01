@@ -71,6 +71,7 @@ def _install_stubs() -> None:
         REMOTE = "remote"
         SENSOR = "sensor"
         BUTTON = "button"
+        REPAIRS = "repairs"
 
     class _ButtonEntity:
         pass
@@ -129,6 +130,13 @@ def _install_stubs() -> None:
     _register(
         "homeassistant.exceptions",
         ConfigEntryNotReady=type("ConfigEntryNotReady", (Exception,), {}),
+        HomeAssistantError=type(
+            "HomeAssistantError",
+            (Exception,),
+            {
+                "__init__": lambda self, *args, **kwargs: super().__init__(*args),
+            },
+        ),
     )
 
     class _DataUpdateCoordinator:  # pragma: no cover - runtime shim
@@ -160,6 +168,22 @@ def _install_stubs() -> None:
         "homeassistant.helpers.update_coordinator",
         DataUpdateCoordinator=_DataUpdateCoordinator,
         CoordinatorEntity=_CoordinatorEntity,
+    )
+
+    class _SelectSelectorConfig:
+        def __init__(self, **kwargs: object) -> None:
+            self.__dict__.update(kwargs)
+
+    class _SelectSelector:
+        def __init__(self, config: object) -> None:
+            self.config = config
+
+    _register(
+        "homeassistant.helpers.selector",
+        SelectOptionDict=lambda **kw: kw,
+        SelectSelectorConfig=_SelectSelectorConfig,
+        SelectSelector=_SelectSelector,
+        SelectSelectorMode=type("SelectSelectorMode", (), {"DROPDOWN": "dropdown"}),
     )
 
     class _ConfigFlow:

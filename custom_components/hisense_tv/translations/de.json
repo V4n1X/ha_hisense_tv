@@ -75,12 +75,6 @@
       }
     },
     "button": {
-      "button_power": {
-        "name": "Power"
-      },
-      "button_wake_on_lan": {
-        "name": "Einschalten (Wake on LAN)"
-      },
       "button_home": {
         "name": "Home"
       },
@@ -110,6 +104,42 @@
       },
       "button_prime_video": {
         "name": "Prime Video"
+      },
+      "button_ok": {
+        "name": "OK"
+      },
+      "button_up": {
+        "name": "Hoch"
+      },
+      "button_down": {
+        "name": "Runter"
+      },
+      "button_left": {
+        "name": "Links"
+      },
+      "button_right": {
+        "name": "Rechts"
+      },
+      "button_volume_up": {
+        "name": "Lautstärke hoch"
+      },
+      "button_volume_down": {
+        "name": "Lautstärke runter"
+      },
+      "button_mute": {
+        "name": "Stumm"
+      },
+      "button_channel_up": {
+        "name": "Sender hoch"
+      },
+      "button_channel_down": {
+        "name": "Sender runter"
+      },
+      "button_disney": {
+        "name": "Disney+"
+      },
+      "button_plex": {
+        "name": "Plex"
       }
     }
   },
@@ -120,9 +150,31 @@
         "data": {
           "poll_interval": "Abfrageintervall für Statusaktualisierung (Sekunden)",
           "enable_wol": "Wake-on-LAN zum Einschalten des TVs verwenden",
-          "command_delay": "Verzögerung zwischen Texteingabe-Befehlen (ms)"
+          "command_delay": "Verzögerung zwischen Texteingabe-Befehlen (ms)",
+          "buttons": "Zu erstellende Buttons (Mehrfachauswahl)"
         }
       }
+    }
+  },
+  "issues": {
+    "pairing_lost": {
+      "title": "Kopplung zum TV verloren",
+      "fix_flow": {
+        "flow_title": "Kopplung wiederherstellen",
+        "step": {
+          "init": {
+            "description": "Die Neukopplung zum TV wird gestartet. Der TV zeigt einen 4-stelligen Code auf dem Bildschirm an - gib ihn im sich öffnenden Dialog ein."
+          }
+        },
+        "abort": {
+          "entry_gone": "Der zugehörige TV-Eintrag existiert nicht mehr."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "tv_not_connected": {
+      "message": "Der TV ist nicht verbunden: {error}"
     }
   }
 }

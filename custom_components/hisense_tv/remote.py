@@ -8,17 +8,10 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.remote import RemoteEntity
 from homeassistant.core import callback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import (
-    CONF_COMMAND_DELAY,
-    CONF_ENABLE_WOL,
-    CONF_MAC_ETHERNET,
-    CONF_MAC_WIFI,
-    DEFAULT_COMMAND_DELAY,
-    DEFAULT_ENABLE_WOL,
-    resolve_key,
-)
+from .const import CONF_COMMAND_DELAY, DEFAULT_COMMAND_DELAY, resolve_key
+from .data import NotConnected
+from .entity import HisenseTvEntity, tv_not_connected_error
 
 if TYPE_CHECKING:
     from .__init__ import HisenseConfigEntry
@@ -28,28 +21,16 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry: "HisenseConfigEntry", async_add_entities) -> None:  # noqa: ANN001
     """Set up the Hisense TV remote from a config entry."""
-    runtime = entry.runtime_data
     async_add_entities([HisenseTvRemote(entry)])
 
 
-class HisenseTvRemote(CoordinatorEntity, RemoteEntity):
+class HisenseTvRemote(HisenseTvEntity, RemoteEntity):
     """Full key remote for a Hisense TV."""
 
-    _attr_has_entity_name = True
     _attr_translation_key = "remote"
 
     def __init__(self, entry: "HisenseConfigEntry") -> None:
-        runtime = entry.runtime_data
-        super().__init__(runtime.coordinator)
-        self._entry = entry
-        self._client = runtime.client
-        self._attr_unique_id = f"{entry.entry_id}-remote"
-
-    @property
-    def device_info(self):  # noqa: ANN201
-        from .__init__ import build_device_info  # noqa: PLC0415
-
-        return build_device_info(self._entry)
+        super().__init__(entry, "remote")
 
     @property
     def should_poll(self) -> bool:
@@ -63,20 +44,9 @@ class HisenseTvRemote(CoordinatorEntity, RemoteEntity):
     def is_on(self) -> bool | None:
         return self._client.connected
 
-    def _wake_mac(self) -> str | None:
-        for key in (CONF_MAC_WIFI, CONF_MAC_ETHERNET):
-            mac = self._entry.data.get(key)
-            if mac:
-                return str(mac)
-        return None
-
     async def async_turn_on(self, **kwargs: Any) -> None:
-        wol_enabled = self._entry.options.get(CONF_ENABLE_WOL, DEFAULT_ENABLE_WOL)
-        if wol_enabled:
-            for key in (CONF_MAC_WIFI, CONF_MAC_ETHERNET):
-                mac = self._entry.data.get(key)
-                if mac:
-                    await self._client.wake_on_lan(str(mac))
+        if self._wol_enabled():
+            await self.async_wake_tv()
         if self._client.connected:
             await self.async_send_command(["power"])
 
@@ -106,7 +76,10 @@ class HisenseTvRemote(CoordinatorEntity, RemoteEntity):
                 expanded.append(key)
 
         for index, key in enumerate(expanded):
-            await self._client.send_key(key)
+            try:
+                await self._client.send_key(key)
+            except NotConnected as err:
+                raise tv_not_connected_error(err) from err
             if index < len(expanded) - 1 and delay > 0:
                 await asyncio.sleep(delay)
 

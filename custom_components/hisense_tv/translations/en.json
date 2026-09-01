@@ -75,12 +75,6 @@
       }
     },
     "button": {
-      "button_power": {
-        "name": "Power"
-      },
-      "button_wake_on_lan": {
-        "name": "Turn on (Wake on LAN)"
-      },
       "button_home": {
         "name": "Home"
       },
@@ -110,6 +104,42 @@
       },
       "button_prime_video": {
         "name": "Prime Video"
+      },
+      "button_ok": {
+        "name": "OK"
+      },
+      "button_up": {
+        "name": "Up"
+      },
+      "button_down": {
+        "name": "Down"
+      },
+      "button_left": {
+        "name": "Left"
+      },
+      "button_right": {
+        "name": "Right"
+      },
+      "button_volume_up": {
+        "name": "Volume up"
+      },
+      "button_volume_down": {
+        "name": "Volume down"
+      },
+      "button_mute": {
+        "name": "Mute"
+      },
+      "button_channel_up": {
+        "name": "Channel up"
+      },
+      "button_channel_down": {
+        "name": "Channel down"
+      },
+      "button_disney": {
+        "name": "Disney+"
+      },
+      "button_plex": {
+        "name": "Plex"
       }
     }
   },
@@ -120,9 +150,31 @@
         "data": {
           "poll_interval": "Poll interval for state refresh (seconds)",
           "enable_wol": "Use Wake-on-LAN to power the TV on",
-          "command_delay": "Delay between text input commands (ms)"
+          "command_delay": "Delay between text input commands (ms)",
+          "buttons": "Buttons to create (multi-select)"
         }
       }
+    }
+  },
+  "issues": {
+    "pairing_lost": {
+      "title": "TV pairing lost",
+      "fix_flow": {
+        "flow_title": "Restore pairing",
+        "step": {
+          "init": {
+            "description": "Re-pairing with the TV will start. The TV will show a 4-digit code on screen - enter it in the dialog that opens."
+          }
+        },
+        "abort": {
+          "entry_gone": "The associated TV entry no longer exists."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "tv_not_connected": {
+      "message": "The TV is not connected: {error}"
     }
   }
 }

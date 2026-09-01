@@ -23,8 +23,11 @@ MODULES = [
     "hisense_tv.models",
     "hisense_tv.discovery",
     "hisense_tv.data",
+    "hisense_tv.entity",
     "hisense_tv.coordinator",
     "hisense_tv.config_flow",
+    "hisense_tv.repairs",
+    "hisense_tv.button",
     "hisense_tv.media_player",
     "hisense_tv.remote",
     "hisense_tv.sensor",
@@ -43,6 +46,7 @@ def test_platforms_declared_in_init() -> None:
     assert "media_player" in platforms
     assert "remote" in platforms
     assert "sensor" in platforms
+    assert "button" in platforms
 
 
 def test_bundled_client_certificate_is_shipped() -> None:

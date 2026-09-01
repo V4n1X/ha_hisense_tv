@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
@@ -11,16 +11,10 @@ from homeassistant.components.media_player import (
     MediaPlayerState,
 )
 from homeassistant.core import callback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import (
-    CONF_ENABLE_WOL,
-    CONF_MAC_ETHERNET,
-    CONF_MAC_WIFI,
-    DEFAULT_ENABLE_WOL,
-    KEY_COMMANDS,
-    MEDIA_PLAYER_KEYS,
-)
+from .const import KEY_COMMANDS, MEDIA_PLAYER_KEYS
+from .data import NotConnected
+from .entity import HisenseTvEntity, tv_not_connected_error
 
 if TYPE_CHECKING:
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -50,31 +44,18 @@ async def async_setup_entry(
     async_add_entities: "AddConfigEntryEntitiesCallback",
 ) -> None:
     """Set up the Hisense TV media player from a config entry."""
-    runtime = entry.runtime_data
     async_add_entities([HisenseTvMediaPlayer(entry)])
 
 
-class HisenseTvMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
+class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
     """Representation of a Hisense TV."""
 
-    _attr_has_entity_name = True
     _attr_name = None
     _attr_supported_features = SUPPORTED_FEATURES
 
-    def __init__(self, entry) -> None:  # noqa: ANN001 - HisenseConfigEntry
-        runtime = entry.runtime_data
-        super().__init__(runtime.coordinator)
-        self._entry = entry
-        self._client = runtime.client
-        self._state = runtime.state
-        self._attr_unique_id = f"{entry.entry_id}-media-player"
+    def __init__(self, entry: "HisenseConfigEntry") -> None:
+        super().__init__(entry, "media-player")
         self._source_requested = False
-
-    @property
-    def device_info(self):  # noqa: ANN201
-        from .__init__ import build_device_info  # noqa: PLC0415
-
-        return build_device_info(self._entry)
 
     @property
     def should_poll(self) -> bool:
@@ -90,9 +71,9 @@ class HisenseTvMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     def state(self) -> MediaPlayerState:
         if not self._client.connected:
             return MediaPlayerState.OFF
-        if self._state.screen_on is False:
+        if self._tv_state.screen_on is False:
             return MediaPlayerState.ON
-        tv_state = self._state.tv_state or ""
+        tv_state = self._tv_state.tv_state or ""
         if tv_state in ("mediadmp", "mediadlna", "livetv"):
             return MediaPlayerState.PLAYING
         if tv_state == "tshift":
@@ -101,52 +82,47 @@ class HisenseTvMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     @property
     def volume_level(self) -> float | None:
-        if self._state.volume_level is None:
+        if self._tv_state.volume_level is None:
             return None
-        return round(self._state.volume_level / 100.0, 2)
+        return round(self._tv_state.volume_level / 100.0, 2)
 
     @property
     def is_volume_muted(self) -> bool | None:
-        return self._state.muted
+        return self._tv_state.muted
 
     @property
     def source(self) -> str | None:
-        current = self._state.current_source()
-        return current.label if current else self._state.source_name
+        current = self._tv_state.current_source()
+        return current.label if current else self._tv_state.source_name
 
     @property
     def source_list(self) -> list[str]:
-        return [source.label for source in self._state.source_list]
+        return [source.label for source in self._tv_state.source_list]
 
     async def _send(self, key: str) -> None:
         await self._client.send_key(key)
 
-    def _wake_mac(self) -> str | None:
-        for key in (CONF_MAC_WIFI, CONF_MAC_ETHERNET):
-            mac = self._entry.data.get(key)
-            if mac:
-                return str(mac)
-        return None
-
     async def async_turn_on(self) -> None:
-        wol_enabled = self._entry.options.get(CONF_ENABLE_WOL, DEFAULT_ENABLE_WOL)
-        if wol_enabled:
-            for key in (CONF_MAC_WIFI, CONF_MAC_ETHERNET):
-                mac = self._entry.data.get(key)
-                if mac:
-                    await self._client.wake_on_lan(str(mac))
+        if self._wol_enabled():
+            await self.async_wake_tv()
         if self._client.connected:
             await self._send(KEY_COMMANDS["power"])
 
     async def async_turn_off(self) -> None:
         # KEY_POWER is a toggle; the TV confirms via state feedback.
-        await self._send(KEY_COMMANDS["power"])
+        try:
+            await self._send(KEY_COMMANDS["power"])
+        except NotConnected as err:
+            raise tv_not_connected_error(err) from err
 
     async def async_set_volume_level(self, volume: float) -> None:
         level = int(round(max(0.0, min(1.0, volume)) * 100))
-        await self._client.set_volume(level)
+        try:
+            await self._client.set_volume(level)
+        except NotConnected as err:
+            raise tv_not_connected_error(err) from err
         # Optimistic echo protection handled by state.apply_volume dedupe.
-        self._state.volume_level = level
+        self._tv_state.volume_level = level
         self.async_write_ha_state()
 
     async def async_volume_up(self) -> None:
@@ -159,22 +135,37 @@ class HisenseTvMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         await self._send(KEY_COMMANDS["mute"])
 
     async def async_media_play(self) -> None:
-        await self._send(MEDIA_PLAYER_KEYS["play"])
+        try:
+            await self._send(MEDIA_PLAYER_KEYS["play"])
+        except NotConnected as err:
+            raise tv_not_connected_error(err) from err
 
     async def async_media_pause(self) -> None:
-        await self._send(MEDIA_PLAYER_KEYS["pause"])
+        try:
+            await self._send(MEDIA_PLAYER_KEYS["pause"])
+        except NotConnected as err:
+            raise tv_not_connected_error(err) from err
 
     async def async_media_stop(self) -> None:
-        await self._send(MEDIA_PLAYER_KEYS["stop"])
+        try:
+            await self._send(MEDIA_PLAYER_KEYS["stop"])
+        except NotConnected as err:
+            raise tv_not_connected_error(err) from err
 
     async def async_media_next_track(self) -> None:
-        await self._send(MEDIA_PLAYER_KEYS["next_track"])
+        try:
+            await self._send(MEDIA_PLAYER_KEYS["next_track"])
+        except NotConnected as err:
+            raise tv_not_connected_error(err) from err
 
     async def async_media_previous_track(self) -> None:
-        await self._send(MEDIA_PLAYER_KEYS["previous_track"])
+        try:
+            await self._send(MEDIA_PLAYER_KEYS["previous_track"])
+        except NotConnected as err:
+            raise tv_not_connected_error(err) from err
 
     async def async_select_source(self, source: str) -> None:
-        for item in self._state.source_list:
+        for item in self._tv_state.source_list:
             if item.label == source:
                 await self._client.select_source(item.sourceid)
                 return
@@ -186,7 +177,7 @@ class HisenseTvMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         super()._handle_coordinator_update()
         if (
             self._client.connected
-            and not self._state.source_list
+            and not self._tv_state.source_list
             and not self._source_requested
         ):
             self._source_requested = True

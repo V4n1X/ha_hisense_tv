@@ -135,9 +135,23 @@ class HisenseTvClient:
 
     # -- lifecycle ---------------------------------------------------------
 
-    async def start(self) -> None:
-        """Connect synchronously once, then keep a reconnect task running."""
-        await self._connect_once()
+    async def start(self, *, allow_offline: bool = False) -> None:
+        """Connect once, then keep the reconnect task running.
+
+        With ``allow_offline`` the initial connection failure (TV powered off
+        at HA start) is tolerated: the reconnect loop keeps retrying in the
+        background so Wake-on-LAN can power the TV back on.
+        """
+        try:
+            await self._connect_once()
+        except CannotConnect:
+            if not allow_offline:
+                raise
+            _LOGGER.debug(
+                "%s:%s unreachable at start - reconnect loop keeps retrying",
+                self.host,
+                self.port,
+            )
         self._stopping = False
         self._task = asyncio.create_task(self._run_forever())
 

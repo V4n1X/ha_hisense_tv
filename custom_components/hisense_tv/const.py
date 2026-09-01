@@ -280,6 +280,13 @@ CONF_UDN = "udn"
 CONF_POLL_INTERVAL = "poll_interval"
 CONF_ENABLE_WOL = "enable_wol"
 CONF_COMMAND_DELAY = "command_delay"
+CONF_BUTTONS = "buttons"
+
+# Buttons created by default. Power and Wake-on-LAN are deliberately absent:
+# both are already covered by media_player.turn_on / media_player.turn_off.
+# The full selectable list lives in button.BUTTON_DESCRIPTIONS; users can
+# change the selection in the integration options.
+DEFAULT_BUTTONS: tuple[str, ...] = ("home", "back", "source", "settings", "info")
 
 DEFAULT_POLL_INTERVAL = 30
 DEFAULT_ENABLE_WOL = True

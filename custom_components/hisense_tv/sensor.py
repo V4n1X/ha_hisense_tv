@@ -11,7 +11,8 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE
 from homeassistant.helpers.entity import EntityCategory
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from .entity import HisenseTvEntity
 
 if TYPE_CHECKING:
     from .__init__ import HisenseConfigEntry
@@ -31,25 +32,12 @@ async def async_setup_entry(hass, entry: "HisenseConfigEntry", async_add_entitie
     )
 
 
-class _HisenseSensorBase(CoordinatorEntity, SensorEntity):
+class _HisenseSensorBase(HisenseTvEntity, SensorEntity):
     """Common plumbing: shared device + availability tied to the connection."""
 
-    _attr_has_entity_name = True
-    _attr_should_poll = False
-
     def __init__(self, entry: "HisenseConfigEntry", suffix: str) -> None:
-        runtime = entry.runtime_data
-        super().__init__(runtime.coordinator)
-        self._entry = entry
-        self._client = runtime.client
-        self._state_obj = runtime.state
-        self._attr_unique_id = f"{entry.entry_id}-{suffix}"
-
-    @property
-    def device_info(self):  # noqa: ANN201
-        from .__init__ import build_device_info  # noqa: PLC0415
-
-        return build_device_info(self._entry)
+        super().__init__(entry, suffix)
+        self._state_obj = entry.runtime_data.state
 
     @property
     def available(self) -> bool:
