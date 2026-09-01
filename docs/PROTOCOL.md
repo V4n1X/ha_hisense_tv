@@ -11,7 +11,7 @@ and [sehaas/ha_hisense_tv](https://github.com/sehaas/ha_hisense_tv).
 |---|---|
 | Transport | **MQTT 3.1** (`MQIsdp`, protocol level 3). Verified live: a 3.1.1 CONNECT is answered with CONNACK `0x05` (not authorized) or the TV closes the socket outright - always pin protocol version 3.1 |
 | Port | **36669** (advertised per device as `mqttport=`) |
-| TLS | `ssl://` when the advertised `transport_protocol >= 1001` (APK `MqttConnectManager`: `i2 >= 1001`); self-signed server cert  verify off / TOFU. Live finding: some firmwares run this port **TLS-only** - a plain CONNECT is answered with an immediate TCP RST, while the TLS handshake completes normally |
+| TLS | `ssl://` when the advertised `transport_protocol >= 1001` (APK `MqttConnectManager`: `i2 >= 1001`); self-signed server cert — verify off / TOFU. Live finding: some firmwares run this port **TLS-only** - a plain CONNECT is answered with an immediate TCP RST, while the TLS handshake completes normally |
 | Mutual TLS | Some models (A71 series) *require* client certificates. The app bundles `res/raw/remoteclientmobile.p12` + `remoteca.bks`; p12 password is **`multiscreen123`** (`ConfigureUtils.e()`), CA store password empty |
 | Username | `hisenseservice` (`ConfigureUtils.c()`, double base64 `YUdselpXNXpaWE5sY25acFkyVT0=`) |
 | Password | `multimqttservice` (`ConfigureUtils.d()`, double base64 `YlhWc2RHbHRjWFIwYzJWeWRtbGpaUT09`) |
