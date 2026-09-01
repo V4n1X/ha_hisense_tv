@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 
@@ -124,10 +122,6 @@ class FakeConfigEntries:
         return await self.async_init_flow(domain, context=context, data=data)
 
     async def async_init_flow(self, domain, *, context=None, data=None, **_kw):
-        self.init_calls.append((domain, context, data))
-        return {"type": "form", "flow_id": "reauth-flow", "context": context}
-
-    async def async_init(self, domain, *, context=None, data=None, **_kw):
         self.init_calls.append((domain, context, data))
         return {"type": "form", "flow_id": "reauth-flow", "context": context}
 

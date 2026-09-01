@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from hisense_tv.config_flow import HisenseTvConfigFlow, _host_schema, _pin_schema
-from hisense_tv.const import CONF_HOST, CONF_PORT, CONF_NAME, DEFAULT_PORT, DEFAULT_NAME
 
 
 @pytest.mark.asyncio
