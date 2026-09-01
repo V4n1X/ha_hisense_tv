@@ -40,6 +40,7 @@ from .const import (
     DISPATCH_AUTH_TOAST,
     DISPATCH_CAPABILITY,
     DISPATCH_CONNECTION,
+    DISPATCH_APP_VERSION,
     DISPATCH_PAIRING_REQUIRED,
     DISPATCH_SOURCES,
     DISPATCH_STATE,
@@ -164,11 +165,15 @@ class HisenseTvClient:
             self._task = None
         await self._disconnect()
 
-    def _build_ssl_context(self) -> ssl.SSLContext:
+    async def _build_ssl_context(self) -> ssl.SSLContext:
         """TOFU-style TLS: accept the TV's self-signed certificate.
 
         The bundled RemoteNOW client certificate authenticates us when the TV
         requires mutual TLS (e.g. A71 series).
+
+        ``load_cert_chain`` does blocking file IO, so it is offloaded to an
+        executor thread - calling it directly would block the event loop
+        (HA flags that as "Detected blocking call ...").
         """
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.check_hostname = False
@@ -178,7 +183,9 @@ class HisenseTvClient:
         )
         if cert_path and Path(cert_path).is_file():
             try:
-                ctx.load_cert_chain(cert_path)
+                await asyncio.get_running_loop().run_in_executor(
+                    None, ctx.load_cert_chain, cert_path
+                )
                 _LOGGER.debug("Using bundled client certificate: %s", cert_path)
             except ssl.SSLError as err:
                 _LOGGER.warning("Could not load client certificate %s: %s", cert_path, err)
@@ -204,13 +211,14 @@ class HisenseTvClient:
                     protocol = ProtocolVersion.V31
                 except ImportError:
                     pass
+                tls_context = await self._build_ssl_context() if tls else None
                 client = aiomqtt.Client(
                     hostname=uri_host,
                     port=self.port,
                     identifier=self.client_id,
                     username=MQTT_USERNAME,
                     password=MQTT_PASSWORD,
-                    tls_context=self._build_ssl_context() if tls else None,
+                    tls_context=tls_context,
                     protocol=protocol,
                     keepalive=KEEPALIVE,
                 )

@@ -22,7 +22,6 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry: "HisenseConfigEntry", async_add_entities) -> None:  # noqa: ANN001
     """Set up Hisense TV sensors from a config entry."""
-    runtime = entry.runtime_data
     async_add_entities(
         [
             HisenseVolumeSensor(entry),

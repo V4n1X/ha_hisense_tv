@@ -18,6 +18,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from .const import (
+    CONF_MAC_ETHERNET,
+    CONF_MAC_WIFI,
     CONF_MODEL_NAME,
     CONF_PLATFORM_VERSION,
     CONF_TV_VERSION,

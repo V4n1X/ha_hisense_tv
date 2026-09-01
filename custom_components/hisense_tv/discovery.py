@@ -28,6 +28,7 @@ import logging
 import socket
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from typing import Any
 from urllib.parse import urlparse
 
 from .const import DEFAULT_PORT, TLS_TRANSPORT_MIN

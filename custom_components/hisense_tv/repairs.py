@@ -9,7 +9,7 @@ starts the entry's reauth flow, which walks the user through PIN pairing.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import voluptuous as vol
 from homeassistant.components.repairs import RepairsFlow
