@@ -155,6 +155,13 @@ The reverse-engineering community this project builds upon:
 
 ## Changelog
 
+### 1.3.2
+
+**Fixed**
+
+- **Hardware info missing on the device card after 1.3.x:** since setup now completes while the TV is powered off, the one-shot capability request during setup never ran — so `chip_platform`/`hw_version` stayed empty. The integration now re-requests capability and app version on **every reconnect** (throttled to once per minute), so hardware/firmware metadata populates even when HA started with the TV off
+- SSDP background enrichment now also backfills the chip **platform** and **transport protocol** into the config entry when they were missing
+
 ### 1.3.1
 
 **Fixed**

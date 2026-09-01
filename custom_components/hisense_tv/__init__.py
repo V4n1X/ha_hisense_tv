@@ -22,6 +22,7 @@ from .const import (
     CONF_MAC_WIFI,
     CONF_MODEL_NAME,
     CONF_PLATFORM_VERSION,
+    CONF_TRANSPORT_PROTOCOL,
     CONF_TV_VERSION,
     DEFAULT_NAME,
     DISPATCH_APP_VERSION,
@@ -86,11 +87,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
     """Set up a Hisense TV from a config entry."""
     cert_path = bundled_client_cert() or default_client_cert_path()
     _last_reauth_request = 0.0
+    _last_metadata_request = 0.0
     coordinator: HisenseTvCoordinator | None = None
+
+    async def _request_tv_metadata() -> None:
+        """Ask the TV for capability/appversion; answers patch sw/hw version."""
+        try:
+            await client.request_capability()
+            await client.request_app_version()
+        except Exception as ex:  # noqa: BLE001 - must never break the connection loop
+            _LOGGER.debug("%s: metadata request failed: %s", entry.title, ex)
 
     def _on_event(name: str, payload) -> None:  # noqa: ANN001 - Any payload
         """Apply push feedback to the shared TvState and refresh listeners."""
-        nonlocal _last_reauth_request
+        nonlocal _last_reauth_request, _last_metadata_request
         runtime: RuntimeData | None = getattr(entry, "runtime_data", None)
         if runtime is None:
             return
@@ -114,6 +124,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
             _LOGGER.debug("%s: source list updated (%d entries)", entry.title, len(payload))
         elif name == DISPATCH_CONNECTION:
             runtime.state.connected = bool(payload)
+            if payload:
+                # On every (re)connect ask for capability/appversion. This used
+                # to run once during setup - but since setup now completes
+                # offline when the TV is powered off, the request would never
+                # happen and hw_version (chip platform) stayed empty.
+                now = time_monotonic()
+                if now - _last_metadata_request > 60:
+                    _last_metadata_request = now
+                    entry.async_create_background_task(
+                        hass,
+                        _request_tv_metadata(),
+                        "hisense_tv_metadata_request",
+                    )
         elif name == DISPATCH_CAPABILITY and isinstance(payload, CapabilityInfo):
             runtime.state.capability = payload
             changed = True
@@ -167,11 +190,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
     _register_device(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Ask for capability/appversion once connected; responses patch metadata.
-    if client.connected:
-        await client.request_capability()
-        await client.request_app_version()
-
     # If network/hardware metadata is missing (e.g. added via manual IP),
     # query SSDP in the background to discover MAC addresses and model info.
     if not entry.data.get(CONF_MAC_WIFI) and not entry.data.get(CONF_MAC_ETHERNET):
@@ -191,6 +209,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
                         new_data[CONF_MODEL_NAME] = tv.model_name
                     if tv.tv_version and not new_data.get(CONF_TV_VERSION):
                         new_data[CONF_TV_VERSION] = tv.tv_version
+                    if tv.transport_protocol and not new_data.get(CONF_TRANSPORT_PROTOCOL):
+                        new_data[CONF_TRANSPORT_PROTOCOL] = tv.transport_protocol
+                    platform = (tv.extras or {}).get("platform")
+                    if platform and not new_data.get(CONF_PLATFORM_VERSION):
+                        new_data[CONF_PLATFORM_VERSION] = str(platform)
                     if new_data != entry.data:
                         hass.config_entries.async_update_entry(entry, data=new_data)
                         _register_device(hass, entry)
