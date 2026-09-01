@@ -1,4 +1,10 @@
-# Hisense TV for Home Assistant
+<div align="center">
+  <img src="https://raw.githubusercontent.com/home-assistant/brands/master/custom_integrations/hisense_tv/logo.png" alt="Hisense" width="220"/>
+  <h1>Hisense TV for Home Assistant</h1>
+  <p><a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS"/></a>
+  <a href="https://github.com/V4n1X/ha_hisensetv/releases/latest"><img src="https://img.shields.io/github/v/release/V4n1X/ha_hisensetv?include_prereleases" alt="Release"/></a>
+  <a href="https://github.com/V4n1X/ha_hisensetv/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/V4n1X/ha_hisensetv/ci.yml?branch=main" alt="CI"/></a></p>
+</div>
 
 Custom integration that controls Hisense Vidaa TVs via the **MQTT broker embedded in the TV** — using the reverse-engineered protocol of the official **Hisense RemoteNOW** app (`com.universal.remote.ms` 5.01.011).
 
