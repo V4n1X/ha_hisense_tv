@@ -1,21 +1,17 @@
-# Release Notes — v1.3.5
+# Release Notes — v1.3.6
 
-Polish release: persistent hardware info, proper sensor icons and instant source/volume feedback.
+Reverts the optimistic state updates from v1.3.5 so sensors always show live values reported by the TV.
 
-## 🛠 Fixed / improved
+## 🔄 Changed
 
-### Hardware info now survives HA restarts with the TV off
-- The device registry already persisted `hw_version`, but it was only learned at runtime from the TV's capability push — a newly created registry device needed the TV powered on once.
-- The chip platform reported via capability is now **stored in the config entry data** the first time it arrives, so `hw_version` ("chip …" / "platform …") is restored from storage on every restart, registry device recreation or entry re-import — no TV required.
+- **No more optimistic pre-writes:** volume up/down, mute and source selection no longer locally assume the resulting state. Sensors exclusively reflect what the TV actually reports through its push feedback (`volumechange`, `sourceswitch`) — "live values only".
 
-### Sensor icons
-- Volume, source and TV state sensors carried the generic eye icon; they now use proper icons: `mdi:volume-high`, `mdi:video-input-hdmi`, `mdi:information-outline`.
+  Rationale: the earlier behaviour was confirmed in practice — the TV pushes `sourceswitch` immediately (source sensor felt instant even without the optimistic write), while the `volumechange` push arrives with a 1–2 s delay on some firmwares. Rather than guessing, the integration now documents that delay as intentional.
 
-### Instant source / volume / mute feedback
-- **Source select:** choosing an input or app now updates the source sensor immediately (optimistic write); the TV's `sourceswitch` push corrects it if needed — previously the sensor lagged until the next push/poll.
-- **Volume up/down:** applies an optimistic single step instead of waiting 1–2 s for the TV's `volumechange` push (the push still corrects the final value).
-- **Mute:** reflects the requested mute state instantly instead of waiting for the TV's feedback.
+- **Documented:** the README troubleshooting table now states that volume/source sensors update 1–2 s after a command because values are live TV pushes, not local guesses.
+
+- The direct volume slider (`media_player.volume_set`) keeps its long-standing echo behaviour, which is deduplicated against the TV's push feedback.
 
 ## 📋 All changes
 
-See the [commit history](https://github.com/V4n1X/ha_hisensetv/compare/v1.3.4...v1.3.5) for the complete list.
+See the [commit history](https://github.com/V4n1X/ha_hisensetv/compare/v1.3.5...v1.3.6) for the complete list.

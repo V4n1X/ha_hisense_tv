@@ -139,6 +139,7 @@ Setup and pairing issues are covered above under Installation. Common runtime to
 
 | Symptom | Cause/Solution |
 |---|---|
+| Volume/source sensor updates 1–2 s after the command | Intentional: values are **live TV pushes**, not optimistic guesses — the sensor reflects the state the TV actually reports as soon as it confirms (see [docs/PROTOCOL.md](docs/PROTOCOL.md)) |
 | Entities `unavailable` although the TV shows a picture | Broker only reachable in "fast" standby; check eco standby |
 | No volume/state values | Some models only push after the first `getvolume` poll (option: reduce interval) |
 | Powering on via automation fails | Enable "Network Standby/Quick Start" on the TV, otherwise WOL is impossible |
@@ -154,6 +155,12 @@ The reverse-engineering community this project builds upon:
 - [d3nd3/Hisense-mqtt-keyfiles](https://github.com/d3nd3/Hisense-mqtt-keyfiles)
 
 ## Changelog
+
+### 1.3.6
+
+**Changed**
+
+- **Removed the optimistic state updates introduced in 1.3.5:** volume up/down, mute and source selection no longer pre-write an assumed state — sensors always show the **live values the TV actually reports** via its push feedback (see the troubleshooting table). The TV's 1–2 s volume push delay is intentional and now documented. (The direct volume slider, `volume_set`, keeps its existing pre-existing echo behaviour.)
 
 ### 1.3.5
 
