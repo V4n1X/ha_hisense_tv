@@ -155,6 +155,19 @@ The reverse-engineering community this project builds upon:
 
 ## Changelog
 
+### 1.3.1
+
+**Fixed**
+
+- **Setup crash (`NameError: CONF_MAC_WIFI`)** after a config-entry reload when the entry had no stored MAC addresses — the background metadata-enrichment path referenced constants that were accidentally removed during the 1.3.0 refactor
+- **App-version feedback ignored**: a missing constant import made the integration drop every `/appversion` push from the TV
+- **Blocking call warning**: the TLS client certificate is now loaded in an executor thread instead of blocking the event loop at setup
+
+**Added**
+
+- Static `pyflakes` gate in CI (would have caught both crashes above) plus a repo-wide encoding sanity test
+- CI actions updated (checkout v7, setup-python v7), README header with Hisense logo and badges
+
 ### 1.3.0
 
 **New**
