@@ -155,6 +155,15 @@ The reverse-engineering community this project builds upon:
 
 ## Changelog
 
+### 1.3.5
+
+**Fixed / improved**
+
+- **Hardware info now persists in the config entry:** the chip platform reported via capability is stored once in the entry data, so `hw_version` survives HA restarts, fresh registry devices and entry re-imports even when the TV is powered off (the device registry already persisted it before, but a newly created device needed the TV on once)
+- **Sensor icons:** volume, source and TV state sensors now carry proper icons (`mdi:volume-high`, `mdi:video-input-hdmi`, `mdi:information-outline`) instead of the generic eye
+- **Instant source feedback:** selecting an input or app updates the source sensor immediately (optimistic), the TV's sourceswitch push corrects if needed
+- **Instant volume/mute feedback:** volume up/down and mute now apply an optimistic single step instead of waiting 1–2 s for the TV's volumechange push
+
 ### 1.3.4
 
 **New**

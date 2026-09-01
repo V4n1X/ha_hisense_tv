@@ -132,12 +132,25 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
 
     async def async_volume_up(self) -> None:
         await self._send(KEY_COMMANDS["volume_up"])
+        # Optimistic single-step feedback; the TV's volumechange push corrects it.
+        if self._tv_state.volume_level is not None:
+            self._tv_state.volume_level = min(100, self._tv_state.volume_level + 1)
+            self.async_write_ha_state()
 
     async def async_volume_down(self) -> None:
         await self._send(KEY_COMMANDS["volume_down"])
+        if self._tv_state.volume_level is not None:
+            self._tv_state.volume_level = max(0, self._tv_state.volume_level - 1)
+            self.async_write_ha_state()
 
     async def async_mute_volume(self, mute: bool) -> None:
         await self._send(KEY_COMMANDS["mute"])
+        # KEY_MUTE is a toggle; reflect the expected state instantly.
+        if self._tv_state.muted is None:
+            self._tv_state.muted = True  # first toggle: assume it was unmuted
+        else:
+            self._tv_state.muted = mute
+        self.async_write_ha_state()
 
     async def async_media_play(self) -> None:
         try:
@@ -173,10 +186,17 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
         for item in self._tv_state.source_list:
             if item.label == source:
                 await self._client.select_source(item.sourceid)
+                # Instant feedback; the TV's sourceswitch push corrects if needed.
+                self._tv_state.source_id = item.sourceid
+                self._tv_state.source_name = item.label
+                self.async_write_ha_state()
                 return
         for app in self._tv_state.app_list:
             if app.name == source:
                 await self._client.launch_app(app.url, app.name, app.url_type, app.store_type)
+                self._tv_state.source_id = app.url
+                self._tv_state.source_name = app.name
+                self.async_write_ha_state()
                 return
         _LOGGER.warning("Unknown source %s", source)
 

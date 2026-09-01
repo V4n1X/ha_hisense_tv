@@ -13,6 +13,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    CONF_CHIP_PLATFORM,
     CONF_ENABLE_WOL,
     CONF_MAC_ETHERNET,
     CONF_MAC_WIFI,
@@ -64,10 +65,12 @@ def build_device_info(entry: "HisenseConfigEntry") -> dr.DeviceInfo:
     model = str(data.get(CONF_MODEL_NAME) or "").strip() or DEFAULT_NAME
     sw_version = str(data[CONF_TV_VERSION]) if data.get(CONF_TV_VERSION) else None
     hw_version = f"platform {data[CONF_PLATFORM_VERSION]}" if data.get(CONF_PLATFORM_VERSION) else None
+    if data.get(CONF_CHIP_PLATFORM):
+        hw_version = f"chip {data[CONF_CHIP_PLATFORM]}"
     runtime = getattr(entry, "runtime_data", None)
     if runtime is not None and runtime.state.capability:
         cap = runtime.state.capability
-        if not hw_version and cap.chip_platform:
+        if cap.chip_platform:
             hw_version = f"chip {cap.chip_platform}"
 
     return dr.DeviceInfo(

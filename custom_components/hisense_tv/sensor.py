@@ -47,6 +47,7 @@ class HisenseVolumeSensor(_HisenseSensorBase):
     """Current volume level as reported by the TV (0-100 %)."""
 
     _attr_translation_key = "volume"
+    _attr_icon = "mdi:volume-high"
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -62,6 +63,7 @@ class HisenseSourceSensor(_HisenseSensorBase):
     """Currently selected source/input."""
 
     _attr_translation_key = "source"
+    _attr_icon = "mdi:video-input-hdmi"
 
     def __init__(self, entry: "HisenseConfigEntry") -> None:
         super().__init__(entry, "source")
@@ -78,6 +80,7 @@ class HisenseStateSensor(_HisenseSensorBase):
     """Raw statetype pushed by the TV (sourceswitch, app, livetv, ...)."""
 
     _attr_translation_key = "tv_state"
+    _attr_icon = "mdi:information-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, entry: "HisenseConfigEntry") -> None:

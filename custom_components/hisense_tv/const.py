@@ -277,6 +277,7 @@ CONF_COUNTRY = "country"
 CONF_LANGUAGE = "language"
 CONF_TRANSPORT_PROTOCOL = "transport_protocol"
 CONF_UDN = "udn"
+CONF_CHIP_PLATFORM = "chip_platform"
 
 CONF_POLL_INTERVAL = "poll_interval"
 CONF_ENABLE_WOL = "enable_wol"

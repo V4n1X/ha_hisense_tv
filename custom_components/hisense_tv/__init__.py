@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from .const import (
+    CONF_CHIP_PLATFORM,
     CONF_MAC_ETHERNET,
     CONF_MAC_WIFI,
     CONF_MODEL_NAME,
@@ -81,6 +82,8 @@ def _register_device(hass: HomeAssistant, entry: HisenseConfigEntry) -> None:
         kwargs["sw_version"] = str(data[CONF_TV_VERSION])
     if data.get(CONF_PLATFORM_VERSION):
         kwargs["hw_version"] = f"platform {data[CONF_PLATFORM_VERSION]}"
+    if data.get(CONF_CHIP_PLATFORM):
+        kwargs["hw_version"] = f"chip {data[CONF_CHIP_PLATFORM]}"
     registry.async_get_or_create(**kwargs)
 
 
@@ -146,6 +149,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
         elif name == DISPATCH_CAPABILITY and isinstance(payload, CapabilityInfo):
             runtime.state.capability = payload
             changed = True
+            # Persist the chip platform so hw_version survives HA restarts
+            # (and fresh registry devices) even when the TV is off.
+            if payload.chip_platform and entry.data.get(CONF_CHIP_PLATFORM) != payload.chip_platform:
+                hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, CONF_CHIP_PLATFORM: payload.chip_platform}
+                )
             _refresh_device_metadata(hass, entry)
         elif name == DISPATCH_APP_VERSION and payload:
             runtime.state.app_version = str(payload)
