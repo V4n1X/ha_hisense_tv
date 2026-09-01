@@ -71,6 +71,26 @@ jobs:
       - name: Validate integration with hassfest
         uses: home-assistant/actions/hassfest@master
 
+  # Local mirror of the hassfest job: run the exact same official container
+  # image that CI uses, so validation can be reproduced on any machine with
+  # Docker (no Python/HA install needed):
+  #
+  #   docker run --rm -v "$(pwd):/github/workspace" -w /github/workspace   #     ghcr.io/home-assistant/hassfest:latest
+  #
+  # On Windows (Git Bash) prefix the mount path with an extra slash:
+  #   -v "//$(pwd):/github/workspace"
+  hassfest-docker:
+    name: Hassfest validation (Docker, official image)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate integration with hassfest (official container)
+        run: |
+          docker run --rm             -v "${{ github.workspace }}:/github/workspace"             -w /github/workspace             ghcr.io/home-assistant/hassfest:latest
+
   hacs:
     name: HACS validation
     runs-on: ubuntu-latest
