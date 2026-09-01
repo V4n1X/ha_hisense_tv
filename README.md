@@ -155,6 +155,12 @@ The reverse-engineering community this project builds upon:
 
 ## Changelog
 
+### 1.3.3
+
+**Fixed**
+
+- **Source select stayed empty:** the media player requested the TV's source list only once (permanent one-shot flag). If that single request silently failed — e.g. while the TV was still waking up after the offline setup — the source select stayed empty forever. The request now retries with a 60 s throttle, and the integration additionally requests the source list on **every reconnect** (same mechanism as the 1.3.2 capability fix)
+
 ### 1.3.2
 
 **Fixed**

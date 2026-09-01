@@ -1,12 +1,13 @@
-# Release Notes — v1.3.2
+# Release Notes — v1.3.3
 
-Fix release for device metadata that went missing after the 1.3.x offline-setup change.
+Fix release for the media player's source select staying empty.
 
 ## 🛠 Fixed
 
-- **Hardware info missing on the device card** (`hw_version`): since 1.3.0 setup completes even when the TV is powered off — but the capability request that fills `chip_platform` / `hw_version` only ran during setup while the TV was connected. Starting Home Assistant with the TV off meant the metadata was never requested and the hardware line stayed empty. The integration now re-requests **capability and app version on every reconnect** (throttled to once per minute), so hardware/firmware metadata populates regardless of the TV's state at HA start.
-- **SSDP enrichment backfills more metadata**: chip `platform` and `transport_protocol` are now written into the config entry when missing, so `hw_version` ("platform …") can be shown even without a capability push.
+- **Source select showed no sources:** the media player requested the TV's source list exactly once (a permanent one-shot flag). If that single request silently failed — most commonly while the TV was still waking up after the offline-setup change in 1.3.x, or during a brief connection flap — the flag was set anyway and the source list stayed empty **forever**.
+
+  The request now retries on every coordinator refresh with a 60 second throttle, and the integration additionally requests the source list on **every reconnect** (same mechanism as the 1.3.2 capability fix). Sources now reliably appear once the TV is on and connected, without needing a restart.
 
 ## 📋 All changes
 
-See the [commit history](https://github.com/V4n1X/ha_hisensetv/compare/v1.3.1...v1.3.2) for the complete list.
+See the [commit history](https://github.com/V4n1X/ha_hisensetv/compare/v1.3.2...v1.3.3) for the complete list.

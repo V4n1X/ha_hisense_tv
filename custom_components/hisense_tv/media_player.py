@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING
 
 from homeassistant.components.media_player import (
@@ -53,9 +54,11 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
     _attr_name = None
     _attr_supported_features = SUPPORTED_FEATURES
 
+    _SOURCE_RETRY_SECONDS = 60.0
+
     def __init__(self, entry: "HisenseConfigEntry") -> None:
         super().__init__(entry, "media-player")
-        self._source_requested = False
+        self._source_requested_at: float | None = None
 
     @property
     def should_poll(self) -> bool:
@@ -173,12 +176,20 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Refresh source list lazily once connected."""
+        """Refresh source list lazily while connected.
+
+        Uses a time-based throttle instead of a one-shot flag: a request can
+        silently fail when the TV is still waking up, and the old permanent
+        flag meant the source list stayed empty forever after that.
+        """
         super()._handle_coordinator_update()
+        if not (self._client.connected and not self._tv_state.source_list):
+            return
+        now = time.monotonic()
         if (
-            self._client.connected
-            and not self._tv_state.source_list
-            and not self._source_requested
+            self._source_requested_at is not None
+            and now - self._source_requested_at < self._SOURCE_RETRY_SECONDS
         ):
-            self._source_requested = True
-            self.hass.async_create_task(self._client.request_source_list())
+            return
+        self._source_requested_at = now
+        self.hass.async_create_task(self._client.request_source_list())

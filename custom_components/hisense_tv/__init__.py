@@ -95,6 +95,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
         try:
             await client.request_capability()
             await client.request_app_version()
+            await client.request_source_list()
         except Exception as ex:  # noqa: BLE001 - must never break the connection loop
             _LOGGER.debug("%s: metadata request failed: %s", entry.title, ex)
 
