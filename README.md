@@ -2,8 +2,8 @@
   <img src="https://raw.githubusercontent.com/home-assistant/brands/master/custom_integrations/hisense_tv/logo.png" alt="Hisense" width="220"/>
   <h1>Hisense TV for Home Assistant</h1>
   <p><a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS"/></a>
-  <a href="https://github.com/V4n1X/ha_hisensetv/releases/latest"><img src="https://img.shields.io/github/v/release/V4n1X/ha_hisensetv?include_prereleases" alt="Release"/></a>
-  <a href="https://github.com/V4n1X/ha_hisensetv/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/V4n1X/ha_hisensetv/ci.yml?branch=main" alt="CI"/></a></p>
+  <a href="https://github.com/V4n1X/ha_hisense_tv/releases/latest"><img src="https://img.shields.io/github/v/release/V4n1X/ha_hisense_tv?include_prereleases" alt="Release"/></a>
+  <a href="https://github.com/V4n1X/ha_hisense_tv/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/V4n1X/ha_hisense_tv/ci.yml?branch=main" alt="CI"/></a></p>
 </div>
 
 Custom integration that controls Hisense Vidaa TVs via the **MQTT broker embedded in the TV** — using the reverse-engineered protocol of the official **Hisense RemoteNOW** app (`com.universal.remote.ms` 5.01.011).
@@ -40,7 +40,7 @@ Tested against the protocol generation of RemoteNOW 5.x (Vidaa-U/VIDAA TVs, stan
 1. Open **HACS** in the sidebar.
 2. Click the **three dots (⋮)** in the bottom right → **Add custom repository**.
 3. Enter and confirm:
-   - *Repository:* `https://github.com/V4n1X/ha_hisensetv`
+   - *Repository:* `https://github.com/V4n1X/ha_hisense_tv`
    - *Category:* `Integration`
 4. The repository appears in the HACS list → open it → click **Download**.
 
@@ -85,10 +85,10 @@ Tested against the protocol generation of RemoteNOW 5.x (Vidaa-U/VIDAA TVs, stan
 ### Manual
 
 ```bash
-git clone https://github.com/V4n1X/ha_hisensetv /tmp/ha_hisensetv
+git clone https://github.com/V4n1X/ha_hisense_tv /tmp/ha_hisense_tv
 mkdir -p <config>/custom_components
-cp -r /tmp/ha_hisensetv/custom_components/hisense_tv <config>/custom_components/
-rm -rf /tmp/ha_hisensetv
+cp -r /tmp/ha_hisense_tv/custom_components/hisense_tv <config>/custom_components/
+rm -rf /tmp/ha_hisense_tv
 ```
 
 Then restart HA and continue with step 6 of the HACS instructions.
@@ -226,7 +226,7 @@ The reverse-engineering community this project builds upon:
 
 ### 1.2.4
 
-Last release before this changelog — see [v1.2.4](https://github.com/V4n1X/ha_hisensetv/releases/tag/v1.2.4).
+Last release before this changelog — see [v1.2.4](https://github.com/V4n1X/ha_hisense_tv/releases/tag/v1.2.4).
 
 ## License
 

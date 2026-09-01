@@ -27,7 +27,7 @@ the official RemoteNOW app's first-time connection.
 1. In Home Assistant, open **HACS** in the sidebar.
 2. Click the **three dots (⋮)** in the bottom right → **Add custom repository**.
 3. Enter the following:
-   - **Repository:** `https://github.com/V4n1X/ha_hisensetv`
+   - **Repository:** `https://github.com/V4n1X/ha_hisense_tv`
    - **Category:** `Integration`
 4. Confirm with **Add**. The repository then appears in HACS.
 5. Search HACS for **"Hisense TV"** (or open the new repository) and click **Download**.
@@ -38,10 +38,10 @@ the official RemoteNOW app's first-time connection.
 
 ```bash
 cd <config-directory>
-git clone https://github.com/V4n1X/ha_hisensetv /tmp/ha_hisensetv
+git clone https://github.com/V4n1X/ha_hisense_tv /tmp/ha_hisense_tv
 mkdir -p custom_components
-cp -r /tmp/ha_hisensetv/custom_components/hisense_tv custom_components/
-rm -rf /tmp/ha_hisensetv
+cp -r /tmp/ha_hisense_tv/custom_components/hisense_tv custom_components/
+rm -rf /tmp/ha_hisense_tv
 ```
 Then restart Home Assistant. (Do not use in parallel with the HACS variant.)
 </details>

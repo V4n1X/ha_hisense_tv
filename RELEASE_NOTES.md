@@ -14,4 +14,4 @@ Reverts the optimistic state updates from v1.3.5 so sensors always show live val
 
 ## 📋 All changes
 
-See the [commit history](https://github.com/V4n1X/ha_hisensetv/compare/v1.3.5...v1.3.6) for the complete list.
+See the [commit history](https://github.com/V4n1X/ha_hisense_tv/compare/v1.3.5...v1.3.6) for the complete list.

@@ -6,10 +6,10 @@
   "dhcp": [
     {"registered_devices": true}
   ],
-  "documentation": "https://github.com/V4n1X/ha_hisensetv",
+  "documentation": "https://github.com/V4n1X/ha_hisense_tv",
   "integration_type": "device",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/V4n1X/ha_hisensetv/issues",
+  "issue_tracker": "https://github.com/V4n1X/ha_hisense_tv/issues",
   "loggers": ["aiomqtt"],
   "quality_scale": "bronze",
   "requirements": ["aiomqtt>=2.0.0,<3.0.0"],
