@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import importlib.util
+import os
 import sys
 import types
 from pathlib import Path
@@ -186,6 +187,45 @@ def _install_stubs() -> None:
         SelectSelectorMode=type("SelectSelectorMode", (), {"DROPDOWN": "dropdown"}),
     )
 
+    class _RepairsFlow:
+        """Minimal stand-in for the repairs flow base class."""
+
+        issue_id: str | None = None
+        data: dict | None = None
+
+        def async_show_form(self, **kwargs: object) -> dict:
+            return {"type": "form", **kwargs}
+
+        def async_create_entry(self, **kwargs: object) -> dict:
+            return {"type": "create_entry", **kwargs}
+
+        def async_abort(self, **kwargs: object) -> dict:
+            return {"type": "abort", **kwargs}
+
+    _register(
+        "homeassistant.components.repairs",
+        RepairsFlow=_RepairsFlow,
+        ConfirmRepairFlow=type("ConfirmRepairFlow", (_RepairsFlow,), {}),
+    )
+
+    class _IssueSeverity:
+        ERROR = "error"
+        WARNING = "warning"
+        CRITICAL = "critical"
+
+    issue_registry = _register(
+        "homeassistant.helpers.issue_registry",
+        IssueSeverity=_IssueSeverity,
+    )
+    issue_registry.async_get = lambda hass: getattr(hass, "issue_registry", None)
+    issue_registry.async_create_issue = (
+        lambda hass, domain, issue_id, **kwargs: issue_registry.async_get(hass)
+        .async_create_issue(hass, domain, issue_id, **kwargs)
+    )
+    issue_registry.async_delete_issue = (
+        lambda hass, domain, issue_id: issue_registry.async_get(hass).async_delete(domain, issue_id)
+    )
+
     class _ConfigFlow:
         def __init_subclass__(cls, **kwargs: object) -> None:
             super().__init_subclass__()
@@ -212,7 +252,14 @@ def _install_stubs() -> None:
     )
 
 
-HAS_REAL_HA = importlib.util.find_spec("homeassistant") is not None
+# CI parity switch: force the stub mode even when the real Home Assistant
+# package is installed locally, so "Run unit tests (no Home Assistant required)"
+# can be reproduced byte-for-byte before pushing:
+#   HISENSE_TEST_FORCE_STUBS=1 python -m pytest tests --ignore=tests/test_ha_smoke.py
+HAS_REAL_HA = (
+    importlib.util.find_spec("homeassistant") is not None
+    and os.environ.get("HISENSE_TEST_FORCE_STUBS") != "1"
+)
 
 if not HAS_REAL_HA:
     _install_stubs()
