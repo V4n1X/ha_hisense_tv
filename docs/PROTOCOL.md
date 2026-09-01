@@ -67,7 +67,7 @@ Topic segments when split by `/`: `[3]`=clientId-or-broadcast, `[4]`=service,
 | `/data/applist` | app list JSON | response to `applist` |
 | `/authentication` | – | **TV requests pairing** (triggers PIN display on the TV screen) |
 | `/authenticationcode` | `{result: 0|1, info}` | result of a PIN submission. `{"result":1,"info":""}` = accepted; `{"result":100,"info":"Wrong authNum!!"}` = wrong or expired code |
-| `/authenticationcodetoast` | – | **NOT a success signal!** App string `authen_toast`: *"Das verbundene Gerät ist besetzt, verbinden Sie ein anderes Gerät"*. The TV sends this when the remote slot is already occupied by another client (e.g. the phone app is running). Pairing cannot proceed until that client disconnects |
+| `/authenticationcodetoast` | – | **NOT a success signal!** App string `authen_toast` (German locale): *"Das verbundene Gerät ist besetzt, verbinden Sie ein anderes Gerät"* (= "The connected device is busy, connect a different device"). The TV sends this when the remote slot is already occupied by another client (e.g. the phone app is running). Pairing cannot proceed until that client disconnects |
 | `/authenticationcodeclose` | – | pairing dialog dismissed; also pushed by the TV itself after the code expires (~30 s) |
 | `/capability` | CapabilityTvInfo | brand, deviceid, featurecode, capability, tuner_num, fake_sleep(+state), audio/screen_capture_supported |
 | `/appversion` | version string | firmware/app enrichment |

@@ -1,198 +1,200 @@
-# Installation & Einrichtung — Schritt für Schritt
+# Installation & Setup — Step by Step
 
-Diese Anleitung beschreibt die Installation der Hisense-TV-Integration über
-HACS und das erste Pairing am TV (inkl. PIN-Eingabe). Der Ablauf entspricht
-1:1 dem der offiziellen RemoteNOW-App beim ersten Verbinden.
+This guide covers installing the Hisense TV integration via HACS and the
+first pairing on the TV (including PIN entry). The flow is a 1:1 replica of
+the official RemoteNOW app's first-time connection.
 
 ---
 
-## Teil 1 — Voraussetzungen prüfen
+## Part 1 — Check prerequisites
 
-| # | Voraussetzung | So prüfst du es |
+| # | Prerequisite | How to check |
 |---|---|---|
-| 1 | Home Assistant ≥ 2024.1 läuft | *Einstellungen → Info* |
-| 2 | **HACS** ist installiert | *HACS* erscheint in der Seitenleiste. Falls nicht: [hacs.xyz](https://hacs.xyz/docs/setup/download) |
-| 3 | TV und HA sind im **selben Netzwerk/Subnet** | TV-Menü → Netzwerkstatus (IP notieren!) |
-| 4 | TV ist **eingeschaltet** (nicht Eco-Standby) | Bild sichtbar |
-| 5 | Die RemoteNOW-Handy-App kann den TV steuern | Bestätigt, dass der MQTT-Dienst am TV aktiv ist |
+| 1 | Home Assistant ≥ 2024.3 running | *Settings → About* |
+| 2 | **HACS** is installed | *HACS* appears in the sidebar. If not: [hacs.xyz](https://hacs.xyz/docs/setup/download) |
+| 3 | TV and HA are on the **same network/subnet** | TV menu → network status (note the IP!) |
+| 4 | TV is **powered on** (not eco standby) | Picture visible |
+| 5 | The RemoteNOW phone app can control the TV | Confirms the TV's MQTT service is active |
 
-> 💡 Notiere dir die IP des TVs (z. B. `192.168.1.50`) — sie erspart dir im
-> Setup die Netzwerksuche, falls SSDP in deinem Netz (VLAN/AP-Isolation)
-> blockiert ist.
+> 💡 Note down the TV's IP (e.g. `192.168.1.50`) — it lets you skip the
+> network scan in the setup in case SSDP is blocked in your network
+> (VLAN/AP isolation).
 
 ---
 
-## Teil 2 — Installation über HACS
+## Part 2 — Install via HACS
 
-1. Öffne in Home Assistant **HACS** in der Seitenleiste.
-2. Rechts unten auf die **drei Punkte (⋮)** klicken → **Eigenes Repository hinzufügen** *(Custom repository)*.
-3. Folgende Daten eintragen:
+1. In Home Assistant, open **HACS** in the sidebar.
+2. Click the **three dots (⋮)** in the bottom right → **Add custom repository**.
+3. Enter the following:
    - **Repository:** `https://github.com/V4n1X/ha_hisensetv`
-   - **Kategorie:** `Integration`
-4. **Hinzufügen** bestätigen. Das Repository erscheint danach in HACS.
-5. In HACS nach **„Hisense TV"** suchen (oder das neue Repository öffnen) und auf **Herunterladen** klicken.
-6. Die Meldung „Neustart erforderlich" bestätigen: **Einstellungen → System → Neu starten**.
+   - **Category:** `Integration`
+4. Confirm with **Add**. The repository then appears in HACS.
+5. Search HACS for **"Hisense TV"** (or open the new repository) and click **Download**.
+6. Confirm the "restart required" message: **Settings → System → Restart**.
 
 <details>
-<summary>Alternative: Manuelle Installation</summary>
+<summary>Alternative: Manual installation</summary>
 
 ```bash
-cd <config-verzeichnis>
+cd <config-directory>
 git clone https://github.com/V4n1X/ha_hisensetv /tmp/ha_hisensetv
 mkdir -p custom_components
 cp -r /tmp/ha_hisensetv/custom_components/hisense_tv custom_components/
 rm -rf /tmp/ha_hisensetv
 ```
-Danach Home Assistant neu starten. (Nicht parallel zur HACS-Variante nutzen.)
+Then restart Home Assistant. (Do not use in parallel with the HACS variant.)
 </details>
 
-> ⚠️ **Vorherige hisense_tv-Integration entfernt?** Diese Integration nutzt
-> denselben Namen (`hisense_tv`) wie z. B. `sehaas/ha_hisense_tv`. Ist eine
-> andere Version bereits installiert, deinstalliere sie zuerst (HACS → entfernen
-> und Ordner `custom_components/hisense_tv` löschen), sonst gibt es Konflikte.
+> ⚠️ **Removed a previous hisense_tv integration?** This integration uses the
+> same name (`hisense_tv`) as e.g. `sehaas/ha_hisense_tv`. If another version
+> is already installed, uninstall it first (HACS → remove and delete the
+> `custom_components/hisense_tv` folder), otherwise there will be conflicts.
 
 ---
 
-## Teil 3 — TV vorbereiten
+## Part 3 — Prepare the TV
 
-Damit Einschalten per Automation später funktioniert und der Broker erreichbar
-ist, empfehle ich diese TV-Einstellungen (Menüpfade variieren je nach Modell):
+So that powering on via automations works later and the broker is reachable,
+these TV settings are recommended (menu paths vary by model):
 
-| # | Einstellung | Wo |
+| # | Setting | Where |
 |---|---|---|
-| 1 | **Netzwerk-Standby / Quick Start** aktivieren | *Einstellungen → System → Energie* |
-| 2 | WLAN **oder** LAN fest verbinden (beides geht; MAC wird je Interface erfasst) | *Einstellungen → Netzwerk* |
-| 3 | Fernwartung/Steuerung durch Apps zulassen (falls dein TV so eine Option hat) | *Einstellungen → System → …* |
+| 1 | Enable **Network Standby / Quick Start** | *Settings → System → Power* |
+| 2 | Firmly connect WLAN **or** LAN (both work; the MAC is captured per interface) | *Settings → Network* |
+| 3 | Allow remote control by apps (if your TV offers such an option) | *Settings → System → …* |
 
-Der MQTT-Dienst des TVs lauscht standardmäßig auf Port **36669**.
+The TV's MQTT service listens on port **36669** by default.
 
 ---
 
-## Teil 4 — Integration einrichten
+## Part 4 — Set up the integration
 
-1. **Einstellungen → Geräte & Dienste**
-2. Unten rechts **Integration hinzufügen**
-3. Nach **„Hisense TV"** suchen und auswählen
-4. Im erscheinenden Dialog:
-   - **Variante A (empfohlen):** Feld *Host/IP* **leer lassen** → die Integration durchsucht das Netzwerk per SSDP → im nächsten Schritt die gefundene TV aus der Liste wählen
-   - **Variante B:** IP direkt eintragen (*Host*) und Port unverändert lassen (**36669**)
-5. Die Verbindung wird jetzt validiert:
-   - Aufbau der MQTT-Verbindung zum TV (bei neueren Firmware-Generationen automatisch mit verschlüsseltem TLS inkl. gebündeltem Client-Zertifikat)
-   - Testabfrage des TV-Status
+1. **Settings → Devices & Services**
+2. **Add Integration** in the bottom right
+3. Search for and select **"Hisense TV"**
+4. In the dialog that appears:
+   - **Variant A (recommended):** leave the *Host/IP* field **empty** → the integration scans the network via SSDP → in the next step select the discovered TV from the list
+   - **Variant B:** enter the IP directly (*Host*) and leave the port unchanged (**36669**)
+5. The connection is now validated:
+   - Establishing the MQTT connection to the TV (on newer firmware generations automatically with encrypted TLS incl. the bundled client certificate)
+   - Test query of the TV state
 
-### Wenn der TV eine Freigabe anfordert → **PIN-Pairing**
+### If the TV requests authorization → **PIN pairing**
 
-Bei aktuelleren Firmware-Ständen zeigt der TV beim ersten unbekannten Client
-(genau wie bei der ersten Einrichtung der Handy-App) einen **4-stelligen Code
-auf dem Bildschirm** an:
+On more recent firmware versions the TV shows a **4-digit code on screen**
+when it sees an unknown client for the first time (exactly like the first
+setup of the phone app):
 
-1. 📺 Der TV zeigt: *Kopplungscode* (vier Ziffern)
-2. 🖥️ In Home Assistant erscheint automatisch das Fenster **„Mit dem TV koppeln"**
-3. ⌨️ Die vier Ziffern **innerhalb der Gültigkeit** eingeben (der Code läuft
-   am TV zeitlich ab — bei Fehler einfach warten, bis der TV einen neuen
-   anzeigt, oder den Vorgang abbrechen und erneut starten)
-4. ✅ Bei Erfolg schließt sich das Fenster und die Einrichtung ist fertig
+1. 📺 The TV shows: *pairing code* (four digits)
+2. 🖥️ The **"Pair with your TV"** window appears automatically in Home Assistant
+3. ⌨️ Enter the four digits **while they are still valid** (the code expires
+   on the TV after a short time — if it fails, simply wait until the TV shows
+   a new one, or cancel and start again)
+4. ✅ On success the window closes and the setup is complete
 
-> ⚠️ **Wichtig für eine reibungslose Kopplung** (live am Gerät verifiziert):
+> ⚠️ **Important for smooth pairing** (verified live on the device):
 >
-> * **Offizielle RemoteNOW-/VIDAA-App vorher komplett schließen** — der TV
->   erlaubt nur *einen* aktiven Client. Ist die Handy-App noch verbunden,
->   zeigt der TV zwar ein Pairing-Fenster in HA, aber **keinen Code**; er
->   meldet stattdessen nur „verbundenes Gerät ist besetzt".
-> * Der Code ist **nur ca. 30 Sekunden gültig**, danach schließt der TV den
->   Dialog selbst. Die Integration fordert bei einem neuen Versuch automatisch
->   einen neuen Code an.
-> * System-Overlays (z. B. der Abschalt-Countdown im Eco-Modus) können den
->   Code **verdecken** — kurz mit der Fernbedienung wegdrücken.
+> * **Close the official RemoteNOW/VIDAA app first** — the TV only allows
+>   *one* active client. If the phone app is still connected, the TV shows a
+>   pairing window in HA but **no code**; it only reports that the connected
+>   device slot is busy.
+> * The code is **only valid for about 30 seconds**, after which the TV closes
+>   the dialog itself. The integration automatically requests a new code on
+>   the next attempt.
+> * System overlays (e.g. the shutdown countdown in eco mode) can **obscure**
+>   the code — dismiss them briefly with the remote.
 
-**Fehlerbilder im Pairing-Fenster:**
+**Error messages in the pairing window:**
 
-| Meldung | Bedeutung | Lösung |
+| Message | Meaning | Solution |
 |---|---|---|
-| *Der eingegebene Kopplungscode wurde vom TV abgelehnt* | Code falsch oder abgelaufen | Neuen Code abwarten und frisch eingeben |
-| *Keine Antwort vom TV* | Timeout während der Prüfung | Erneut versuchen; TV nicht zwischenzeitlich ausschalten |
-| Kein PIN-Fenster, Setup schließt direkt | Ältere Firmware ohne Kopplungszwang | Alles gut — kein Pairing nötig |
-| Code erscheint gar nicht auf dem TV | Remote-Slot belegt (Handy-App läuft) oder Overlay verdeckt ihn | App schließen / Overlay wegdrücken und Setup erneut starten |
+| *The entered pairing code was rejected by the TV* | Code wrong or expired | Wait for a new code and enter it fresh |
+| *No response from the TV* | Timeout during validation | Try again; don't power off the TV in the meantime |
+| No PIN window, setup closes directly | Older firmware without pairing requirement | All good — no pairing needed |
+| No code appears on the TV at all | Remote slot busy (phone app running) or an overlay hides it | Close the app / dismiss the overlay and restart the setup |
 
-5. Danach legt die Integration das Gerät in der **Geräteregistrierung** an:
-   Hersteller *Hisense*, Modell, Firmware-Version und MAC-Adresse werden
-   automatisch befüllt.
+5. Afterwards the integration creates the device in the **device registry**:
+   manufacturer *Hisense*, model, firmware version and MAC address are
+   filled in automatically.
 
 ---
 
-## Teil 5 — Funktion prüfen
+## Part 5 — Verify it works
 
-Nach der Einrichtung existieren folgende Entitäten (Beispielname „Wohnzimmer TV"):
+After setup the following entities exist (example name "Living Room TV"):
 
-| Entität | Zweck |
+| Entity | Purpose |
 |---|---|
-| `media_player.wohnzimmer_tv` | Ein/Aus, Lautstärke, Mute, Quelle, Play/Pause |
-| `remote.wohnzimmer_tv_remote` | Alle Fernbedienungstasten |
-| `sensor.wohnzimmer_tv_volume` | Lautstärke in % |
-| `sensor.wohnzimmer_tv_source` | Aktive Eingangsquelle |
-| `sensor.wohnzimmer_tv_status` | Roh-Status des TVs (diagnostisch) |
+| `media_player.living_room_tv` | On/Off, volume, mute, source, play/pause |
+| `remote.living_room_tv_remote` | All remote keys |
+| `sensor.living_room_tv_volume` | Volume in % |
+| `sensor.living_room_tv_source` | Active input source |
+| `sensor.living_room_tv_status` | Raw TV state (diagnostic) |
+| `button.living_room_tv_*` | Quick-action keys (default: Home, Back, Source, Settings, Info — configurable in the options) |
 
-> ℹ️ **Verfügbarkeit = TV läuft.** Der MQTT-Broker steckt im TV selbst — ist
-> das Gerät aus, gibt es technisch nichts abzufragen. Deshalb gehen alle
-> Entitäten dieser Integration in den Zustand **`unavailable`**, sobald der TV
-> aus ist, statt einen Scheinzustand („aus") zu melden. Einschalten geht
-> ausschließlich per **Wake-on-LAN** (siehe unten).
+> ℹ️ **Availability = TV is running.** The MQTT broker lives inside the TV
+> itself — when the device is off there is technically nothing to query.
+> That's why all entities of this integration go to **`unavailable`** as soon
+> as the TV is off, instead of reporting a fake state ("off"). Powering on is
+> done exclusively via **Wake-on-LAN** (see below) — and thanks to the
+> offline-capable setup this also works right after an HA restart.
 
-**Schnelltest in Entwicklerwerkzeuge → Aktionen:**
+**Quick test in Developer Tools → Actions:**
 
 ```yaml
 action: remote.send_command
 target:
-  entity_id: remote.wohnzimmer_tv_remote
+  entity_id: remote.living_room_tv_remote
 data:
   command: volume_up
 ```
 
-Lautstärke sollte sich am TV ändern. Für Volllautstärke-Tests:
+The volume should change on the TV. For a full volume test:
 
 ```yaml
 action: media_player.volume_set
 target:
-  entity_id: media_player.wohnzimmer_tv
+  entity_id: media_player.living_room_tv
 data:
   volume_level: 0.3
 ```
 
 ---
 
-## Teil 6 — Optionen anpassen (optional)
+## Part 6 — Adjust options (optional)
 
-*Einstellungen → Geräte & Dienste → Hisense TV → ⚙️ Optionen* (über die drei Punkte):
+*Settings → Devices & Services → Hisense TV → ⚙️ Options* (via the three dots):
 
-| Option | Default | Sinn |
+| Option | Default | Purpose |
 |---|---|---|
-| Abfrageintervall | 30 s | Statusaktualisierung; kleiner (10–15 s), falls Werte verzögert kommen |
-| Wake-on-LAN | an | Einschalten per Magic Packet statt Power-Taste (Einschalten ist **nur** per WOL möglich) |
-| Befehlsverzögerung | 30 ms | Pacing bei Kettenbefehlen (`command: "back, ok"`) |
+| Poll interval | 30 s | State refresh; use a smaller value (10–15 s) if values arrive late |
+| Wake-on-LAN | on | Power on via magic packet instead of the power key (powering on is **only** possible via WOL) |
+| Command delay | 30 ms | Pacing for command chains (`command: "back, ok"`) |
+| Button selection | 5 buttons | Multi-select from 22 available quick-action buttons |
 
-**Einschalten per WOL — Alternative mit Boardmitteln:** Die Integration
-versendet das Magic Packet selbst (`media_player.turn_on` bzw.
-`remote.turn_on`, MAC wird automatisch aus der SSDP-Erkennung übernommen).
-Du kannst aber genauso Home Assistants **native `wake_on_lan`-Integration**
-nutzen: *Einstellungen → Geräte & Dienste → Integration hinzufügen →
-Wake-on-LAN*, dann einen Switch mit der TV-MAC anlegen (MAC steht in den
-Entitäts-Attributen des Status-Sensors bzw. im Diagnose-Download). Für
-`turn_on`-Aktionen in Automatisierungen funktioniert beides.
+**Powering on via WOL — alternative with built-in tools:** The integration
+sends the magic packet itself (`media_player.turn_on` or `remote.turn_on`,
+the MAC is captured automatically during SSDP discovery). You can equally use
+Home Assistant's **native `wake_on_lan` integration**: *Settings → Devices &
+Services → Add Integration → Wake-on-LAN*, then create a switch with the TV's
+MAC (the MAC is in the state sensor's entity attributes and in the
+diagnostics download). Both work for `turn_on` actions in automations.
 
-**IP hat sich geändert?** Kein Neu-Einrichten nötig: Die Integration erkennt
-die TV über ihre MAC wieder (Reconfirm) — oder du änderst die Adresse manuell
-über *Konfigurieren* (Reconfigure).
+**IP address changed?** No need to set up again: the integration recognizes
+the TV by its MAC (Reconfirm) — or you change the address manually via
+*Configure* (Reconfigure).
 
 ---
 
-## Problemlösung
+## Troubleshooting
 
-| Problem | Ursache | Behebung |
+| Problem | Cause | Fix |
 |---|---|---|
-| „Verbindung fehlgeschlagen" im Setup | TV im Tiefstandby, VLAN-Trennung, Firewall | TV einschalten; Port 36669/TCP vom HA-Host aus testen (`telnet <tv-ip> 36669`); AP-Client-Isolation deaktivieren |
-| TV wird beim Scan nicht gefunden | SSDP/Multicast blockiert (häufig bei Mesh/WLAN-Bridges) | Variante B mit manueller IP nutzen |
-| Entities dauerhaft `unavailable` | TV tief im Standby → Broker aus | Das ist der OFF-Zustand; für Automatisierungen „Verfügbarkeit" ignorieren oder Netzwerk-Standby aktivieren |
-| Keine Lautstärke-/Statuswerte | Manche Modelle pushen erst auf Poll | Abfrageintervall auf 10–15 s senken |
-| PIN-Fenster kommt nie | Alte Firmware ohne Kopplungszwang | Normal — Setup schließt automatisch |
+| "Failed to connect" during setup | TV in deep standby, VLAN separation, firewall | Power on the TV; test port 36669/TCP from the HA host (`telnet <tv-ip> 36669`); disable AP client isolation |
+| TV not found during scan | SSDP/multicast blocked (common with mesh/WLAN bridges) | Use variant B with a manual IP |
+| Entities permanently `unavailable` | TV in deep standby → broker off | This is the OFF state; ignore "availability" in automations or enable network standby |
+| No volume/state values | Some models only push after a poll | Lower the poll interval to 10–15 s |
+| PIN window never appears | Old firmware without pairing requirement | Normal — the setup closes automatically |
 
-Noch Fragen zum Protokoll dahinter? → [`PROTOCOL.md`](PROTOCOL.md)
+Questions about the protocol behind it? → [`PROTOCOL.md`](PROTOCOL.md)
