@@ -313,34 +313,41 @@ async def async_scan(timeout: float = 4.0) -> list[str]:
     done = asyncio.Event()
     results: dict[str, dict[str, str]] = {}
 
-    request_lines = []
+    # One datagram per search target: devices commonly ignore two M-SEARCH
+    # requests concatenated into a single packet.
+    payloads = []
     for st in SEARCH_TARGETS:
-        request_lines.extend(
-            [
-                "M-SEARCH * HTTP/1.1",
-                f"HOST: {SSDP_ADDRESS[0]}:{SSDP_ADDRESS[1]}",
-                f'ST: "{st}"' if st == "ssdp:all" else f"ST: {st}",
-                'MAN: "ssdp:discover"',
-                f"MX: {max(1, int(timeout))}",
-                "",
-                "",
-            ]
+        payloads.append(
+            "\r\n".join(
+                [
+                    "M-SEARCH * HTTP/1.1",
+                    f"HOST: {SSDP_ADDRESS[0]}:{SSDP_ADDRESS[1]}",
+                    f'ST: "{st}"' if st == "ssdp:all" else f"ST: {st}",
+                    'MAN: "ssdp:discover"',
+                    f"MX: {max(1, int(timeout))}",
+                    "",
+                    "",
+                ]
+            ).encode("ascii")
         )
-    payload = "\r\n".join(request_lines).encode("ascii")
 
+    # Bind locally instead of remote_addr=: remote_addr connect()s the socket
+    # to the multicast group, and a connected UDP socket drops the unicast
+    # M-SEARCH replies that the devices actually send back.
     try:
         transport, _protocol = await loop.create_datagram_endpoint(
             lambda: _SsdpProtocol(results, done),
-            remote_addr=SSDP_ADDRESS,
+            local_addr=("0.0.0.0", 0),
             reuse_port=True,
         )
     except (OSError, NotImplementedError, ValueError):
         # SO_REUSE_PORT is unavailable on e.g. Windows.
         transport, _protocol = await loop.create_datagram_endpoint(
             lambda: _SsdpProtocol(results, done),
-            remote_addr=SSDP_ADDRESS,
+            local_addr=("0.0.0.0", 0),
         )
-    transport.sendto(payload)
+    for payload in payloads:
+        transport.sendto(payload, SSDP_ADDRESS)
 
     with contextlib.suppress(asyncio.TimeoutError):
         await asyncio.wait_for(done.wait(), timeout)
