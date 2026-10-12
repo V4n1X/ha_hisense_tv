@@ -1,28 +1,32 @@
-# Release Notes — v1.4.0
+# Release Notes — v1.5.0
 
-Wake-on-LAN now works for TVs added by IP address, and the integration moves to the Home Assistant 2026.9 device registry.
-
-## ⚠️ Breaking
-
-- **Home Assistant 2026.9 or newer is required.** The integration now looks up its registry device with the entry-scoped `async_get_device_by_identifier` API introduced in the 2026.9 device registry rework (the old `async_get_device` is deprecated). HACS only offers this update on HA 2026.9+; older installations stay on v1.3.6.
+Changing the TV's IP works again, already configured TVs are no longer offered as new, and power/mute commands only do what they are asked to. All fixes are covered by new tests that run the setup flows against a real Home Assistant 2026.10.
 
 ## 🐛 Fixed
 
-- **SSDP discovery never received any reply, so Wake-on-LAN silently did nothing for TVs added by IP** ([#1](https://github.com/V4n1X/ha_hisense_tv/pull/1), thanks [@Anzic23](https://github.com/Anzic23)). The M-SEARCH socket was `connect()`ed to the multicast group, and a connected UDP socket drops the unicast replies the TVs actually send. As a result the background enrichment never learned the TV's MAC addresses, `media_player.turn_on` sent no magic packet, and `turn_off` raised `NotConnected` while the TV was in standby.
+- **Reconfigure (change IP) always failed.** Home Assistant rejects creating a new entry from a reconfigure flow, so saving a new address raised an error. Reconfigure and Reauth now update the existing entry in place and reload it.
+- **Already configured TVs were offered again.**
+  - A DHCP lease renewal of a configured TV opened a new "discovered" setup card (and crashed when SSDP found nothing), and an IP change was never applied. The integration now recognizes the TV by its MAC and moves the existing entry to the new IP silently.
+  - TVs added by IP had no unique ID, so they could be added twice and SSDP kept offering them. Setup now recognizes an existing TV by MAC or host — before you are asked for a PIN.
+- **`turn_on` switched a running TV off** (`KEY_POWER` is a toggle). The power key is now only sent to a TV in fake sleep; an unreachable TV is woken via Wake-on-LAN. `turn_off` on a TV that is already off does nothing instead of raising an error, and `remote.turn_off` — previously missing — works.
+- **`media_player.volume_mute` ignored the requested state:** `mute: true` on a muted TV unmuted it. The toggle is now only sent when the TV reports the other state.
+- **`remote.send_command` ignored `num_repeats`.**
+- **Pairing could time out with the correct PIN** when the TV pushed more than 64 messages while the PIN dialog was open.
+- **Closing the PIN dialog left a connection to the TV open** (with its reconnect loop) until Home Assistant restarted.
+- **The state lagged up to one poll interval** after the TV went offline or came back; entities now update immediately.
+- **Duplicate device** when a TV added by IP later revealed its MAC address — the existing device is now moved to the new identity.
+- Smaller fixes: the firmware version shows up on the device card as soon as the TV reports it; a failed unload no longer cuts the connection; an invalid stored MAC no longer blocks Wake-on-LAN on the other MAC; commands to an offline TV report the translated "TV not connected" error, and an unknown source name raises a clear validation error.
 
-  The scan now binds locally, sends to the multicast group explicitly and uses one datagram per search target. After updating, **restart Home Assistant once with the TV switched on**: the entry is enriched with both MAC addresses, model and firmware version, and `media_player.turn_on` wakes the TV from standby (about 25 s on the tested HE88L5V).
+## 🔄 Changed
 
-## 🔒 Hardened
-
-- UPnP device descriptions from the network are parsed with `defusedxml` (protection against XML entity-expansion attacks). This adds `defusedxml` as a runtime dependency, installed automatically.
+- **"Pairing lost" now uses Home Assistant's built-in reauth notification.** After a TV reset or firmware update you still get a repair notice under *Settings → System → Repairs* that leads into PIN re-pairing — it is now Home Assistant's own. The previous custom notice was shared by all TVs (re-pairing one TV dismissed another TV's notice) and its button could open a second pairing dialog.
+- The TV's hardware `device_id` is redacted in diagnostics downloads.
 
 ## 🛠️ Under the hood
 
-- **CI runs on Python 3.14 against current Home Assistant.** HA 2026.3+ requires Python 3.14.2, so CI on Python 3.13 had silently been testing HA 2026.2.
-- **Deprecation canary:** CI boots a real Home Assistant, sets the integration up, injects a capability push message and fails as soon as HA reports deprecated API usage or a blocking call — so the next HA deprecation is caught before users see it.
-- **Code style enforced by ruff** with Home Assistant's official rule set (lint and format), plus pre-commit hooks running the same checks locally.
-- **Coverage measurement with a ratchet gate**, new tests for the SSDP scan and the device-metadata helpers.
+- **Tests against a real Home Assistant core:** config flows run through Home Assistant's own flow manager, plus entity behaviour and entry setup. Test coverage with Home Assistant installed rose from 45 % to 72 %.
+- Validation schemas use `probatio`, Home Assistant's validation library since 2026.9 (`voluptuous` is only an alias there).
 
 ## 📋 All changes
 
-See the [commit history](https://github.com/V4n1X/ha_hisense_tv/compare/v1.3.6...v1.4.0) for the complete list.
+See the [commit history](https://github.com/V4n1X/ha_hisense_tv/compare/v1.4.0...v1.5.0) for the complete list.

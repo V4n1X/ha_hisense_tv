@@ -156,7 +156,7 @@ The reverse-engineering community this project builds upon:
 
 ## Changelog
 
-### Unreleased
+### 1.5.0
 
 **Fixed**
 
