@@ -182,7 +182,7 @@ MAC (the MAC is in the state sensor's entity attributes and in the
 diagnostics download). Both work for `turn_on` actions in automations.
 
 **IP address changed?** No need to set up again: the integration recognizes
-the TV by its MAC (Reconfirm) — or you change the address manually via
+the TV by its MAC when it renews its DHCP lease — or you change the address manually via
 *Configure* (Reconfigure).
 
 ---

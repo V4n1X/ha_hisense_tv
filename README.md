@@ -18,8 +18,8 @@ Custom integration that controls Hisense Vidaa TVs via the **MQTT broker embedde
 - **Auto-discovery** — SSDP-based (like the app), plus a manual network scan during setup and IP repair via DHCP/MAC
 - **First pairing like the app** — when the TV shows a 4-digit pairing code, the setup flow asks for it; on newer firmware generations with encrypted MQTT the bundled RemoteNOW client certificate is used automatically
 - **Device registry** — model, manufacturer, firmware, MAC and name are registered from UPnP/discovery/capability data
-- **"Pairing lost" repair flow** — after a TV reset or firmware update a repair notification appears that leads straight into PIN re-pairing
-- Reconfigure (change IP), Reconfirm (IP changed by DHCP), Reauth (pairing expired), Options flow (polling, WOL, command pacing, button selection)
+- **Re-pairing when the pairing is lost** — after a TV reset or firmware update Home Assistant shows a repair notification that leads straight into PIN re-pairing (Reauth)
+- Reconfigure (change IP), automatic IP update via DHCP/MAC, Reauth (pairing expired), Options flow (polling, WOL, command pacing, button selection)
 
 ## Supported devices
 
@@ -99,7 +99,7 @@ Then restart HA and continue with step 6 of the HACS instructions.
 |---|---|
 | Change IP/port | *Integration → Configure* (Reconfigure, with revalidation) |
 | Polling/WOL/pacing/button selection | *Integration → Options* |
-| IP changed by DHCP | happens automatically (Reconfirm via device-bound MAC) |
+| IP changed by DHCP | happens automatically (the TV is recognized by its MAC) |
 | TV was reset / pairing lost | the integration notifies you; Reauth asks for the PIN again |
 
 ## Remote commands & buttons
@@ -118,7 +118,7 @@ data:
   command: home
 ```
 
-Multiple keys: `command: ["1", "2"]` or `"back, ok"` · pacing via the `command_delay` option or `delay_secs`.
+Multiple keys: `command: ["1", "2"]` or `"back, ok"` · pacing via the `command_delay` option or `delay_secs` · repeat the whole sequence with `num_repeats`.
 
 > 📋 **All 60+ keys & apps**: full overview of all keys, direct apps, color keys and digits in [`docs/REMOTE_KEYS.md`](docs/REMOTE_KEYS.md).
 
@@ -155,6 +155,31 @@ The reverse-engineering community this project builds upon:
 - [d3nd3/Hisense-mqtt-keyfiles](https://github.com/d3nd3/Hisense-mqtt-keyfiles)
 
 ## Changelog
+
+### Unreleased
+
+**Fixed**
+
+- **Reconfigure (change IP) always failed:** Home Assistant rejects creating a new entry from a reconfigure flow. Reconfigure and Reauth now update the existing entry in place and reload it.
+- **Already configured TVs were offered again:** a DHCP lease renewal of a registered TV opened a new "discovered" setup card (and crashed when SSDP found nothing), and an IP change was never applied. DHCP now follows the IP change of the configured TV silently. TVs added by IP now get their MAC as unique id, and SSDP/manual setup recognize an existing TV by MAC or host instead of adding it twice.
+- **Abandoned pairing kept a connection open:** closing the PIN dialog left the probe MQTT connection (with its reconnect loop) running until Home Assistant restarted.
+- **Pairing could time out with the correct PIN** when the TV pushed more than 64 messages while the PIN dialog was open (event ring markers were list indices).
+- **`turn_on` switched a running TV off** (`KEY_POWER` is a toggle) — media player and remote now only send it to a TV in fake sleep; `turn_off` on an offline TV is a no-op instead of an error. `remote.turn_off` was missing entirely.
+- **`media_player.volume_mute` ignored the requested state:** `mute: true` on a muted TV unmuted it. The toggle is now only sent when the TV reports the other state.
+- **`remote.send_command` ignored `num_repeats`.**
+- **State lagged up to one poll interval** after the TV went offline or came back: connection changes now update the entities immediately.
+- **Duplicate device** when a TV added by IP later revealed its MAC (or a raw/formatted MAC spelling changed): the existing device is moved to the new identifier.
+- Firmware version feedback now updates the device card immediately; a failed platform unload no longer stops the connection; an invalid stored MAC no longer blocks Wake-on-LAN on the other MAC; volume/mute/source/button commands on an offline TV report the translated "TV not connected" error, an unknown source raises a validation error.
+
+**Changed**
+
+- **"Pairing lost" uses Home Assistant's built-in reauth repair issue** instead of an own one. The own issue was global (one TV's re-pair dismissed another TV's notice) and its fix button opened a second reauth flow.
+- `capability.device_id` is redacted in diagnostics.
+- Validation schemas use `probatio`, Home Assistant's validation library since 2026.9 (`voluptuous` is only an alias there).
+
+**Added**
+
+- Tests against a real Home Assistant core (`tests/test_ha_*.py`): config flows through HA's flow manager, entity behaviour and entry setup. Coverage with real HA rises from 45 % to 72 %.
 
 ### 1.4.0
 
