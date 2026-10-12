@@ -24,14 +24,24 @@ the official RemoteNOW app's first-time connection.
 
 ## Part 2 — Install via HACS
 
+[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=V4n1X&repository=ha_hisense_tv&category=integration)
+
+Click the button above: HACS opens the repository and offers to add it as a
+custom repository. Then click **Download** and confirm the "restart required"
+message (**Settings → System → Restart**).
+
+<details>
+<summary>Without the button</summary>
+
 1. In Home Assistant, open **HACS** in the sidebar.
-2. Click the **three dots (⋮)** in the bottom right → **Add custom repository**.
+2. Click the **three dots (⋮)** in the top right → **Custom repositories**.
 3. Enter the following:
    - **Repository:** `https://github.com/V4n1X/ha_hisense_tv`
    - **Category:** `Integration`
 4. Confirm with **Add**. The repository then appears in HACS.
 5. Search HACS for **"Hisense TV"** (or open the new repository) and click **Download**.
 6. Confirm the "restart required" message: **Settings → System → Restart**.
+</details>
 
 <details>
 <summary>Alternative: Manual installation</summary>
@@ -69,6 +79,10 @@ The TV's MQTT service listens on port **36669** by default.
 ---
 
 ## Part 4 — Set up the integration
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=hisense_tv)
+
+Click the button above, or do it manually:
 
 1. **Settings → Devices & Services**
 2. **Add Integration** in the bottom right

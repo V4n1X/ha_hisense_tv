@@ -1,88 +1,87 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/home-assistant/brands/master/custom_integrations/hisense_tv/logo.png" alt="Hisense" width="220"/>
   <h1>Hisense TV for Home Assistant</h1>
+  <p><b>Local control for Hisense VIDAA TVs — no cloud, no extra hardware.</b></p>
   <p><a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS"/></a>
   <a href="https://github.com/V4n1X/ha_hisense_tv/releases/latest"><img src="https://img.shields.io/github/v/release/V4n1X/ha_hisense_tv?include_prereleases" alt="Release"/></a>
   <a href="https://github.com/V4n1X/ha_hisense_tv/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/V4n1X/ha_hisense_tv/ci.yml?branch=main" alt="CI"/></a></p>
 </div>
 
-Custom integration that controls Hisense Vidaa TVs via the **MQTT broker embedded in the TV** — using the reverse-engineered protocol of the official **Hisense RemoteNOW** app (`com.universal.remote.ms` 5.01.011).
+Custom integration that controls Hisense VIDAA TVs via the **MQTT broker embedded in the TV**, using the reverse-engineered protocol of the official **Hisense RemoteNOW** app (`com.universal.remote.ms` 5.01.011).
 
-> **Migration:** This integration is a standalone replacement for `sehaas/ha_hisense_tv` and uses the same domain `hisense_tv`. Uninstall any existing `hisense_tv` integration before installing.
+> [!IMPORTANT]
+> **Migrating?** This integration is a standalone replacement for `sehaas/ha_hisense_tv` and uses the same domain `hisense_tv`. Uninstall any existing `hisense_tv` integration before installing.
 
-## Features
+## ✨ Features
 
-- **media_player** — On/Off, volume set/mute, Play/Pause/Stop, Next/Previous track, source selection (HDMI/TV/…) **plus installed apps** — selecting an app in the source selector launches it on the TV
-- **remote** — all 60+ remote keys via `remote.send_command`
-- **Sensors** — volume (%), active source, TV state (`sourceswitch`, `app`, `livetv`, … incl. fake sleep/screen state) + diagnostic attributes (firmware, chip platform, capabilities)
-- **Auto-discovery** — SSDP-based (like the app), plus a manual network scan during setup and IP repair via DHCP/MAC
-- **First pairing like the app** — when the TV shows a 4-digit pairing code, the setup flow asks for it; on newer firmware generations with encrypted MQTT the bundled RemoteNOW client certificate is used automatically
-- **Device registry** — model, manufacturer, firmware, MAC and name are registered from UPnP/discovery/capability data
-- **Re-pairing when the pairing is lost** — after a TV reset or firmware update Home Assistant shows a repair notification that leads straight into PIN re-pairing (Reauth)
-- Reconfigure (change IP), automatic IP update via DHCP/MAC, Reauth (pairing expired), Options flow (polling, WOL, command pacing, button selection)
+| | Platform | What you get |
+|---|---|---|
+| 📺 | `media_player` | On/off, volume set/mute, play/pause/stop, next/previous track, source selection (HDMI/TV/…) **plus installed apps** — picking an app in the source selector launches it on the TV |
+| 🎮 | `remote` | All 60+ remote keys via `remote.send_command` |
+| 📊 | `sensor` | Volume (%), active source, TV state (incl. fake sleep/screen state) and diagnostic attributes (firmware, chip platform, capabilities) |
+| 🔘 | `button` | Quick-action buttons for the most common keys, selectable in the options |
 
-## Supported devices
+**Under the hood**
 
-Tested against the protocol generation of RemoteNOW 5.x (Vidaa-U/VIDAA TVs, standard MQTT port 36669). TVs requiring a client certificate (e.g. A71 series) are covered by the bundled certificate. Older firmware without push feedback works without the pairing step.
+- 🔍 **Auto-discovery** — SSDP like the app, plus a manual network scan during setup and IP repair via DHCP/MAC
+- 🔐 **PIN pairing like the app** — when the TV shows a 4-digit code, the setup asks for it; on newer firmware with encrypted MQTT the bundled RemoteNOW client certificate is used automatically
+- 🏷️ **Device registry** — model, manufacturer, firmware, MAC and name are filled in automatically
+- ♻️ **Self-healing** — Reconfigure (change IP), automatic IP update via DHCP/MAC, and Reauth with a repair notification when the pairing is lost after a TV reset or firmware update
 
-## Installation
+## 📺 Supported devices
 
-### Prerequisites
+Tested against the protocol generation of RemoteNOW 5.x (VIDAA / Vidaa-U TVs, standard MQTT port 36669).
 
-- Home Assistant ≥ **2026.9** with **HACS** installed
+- 🔒 TVs requiring a client certificate (e.g. A71 series) are covered by the bundled certificate.
+- 📼 Older firmware without push feedback works without the pairing step.
+
+## 📦 Installation
+
+**Requirements**
+
+- Home Assistant ≥ **2026.9** with [HACS](https://hacs.xyz) installed
 - TV and Home Assistant on the **same network**, TV powered **on during setup**
-- Recommendation: enable *Network Standby / Quick Start* on the TV (so automations can power it on later)
 
-### Step by step via HACS
+> [!TIP]
+> Enable *Network Standby / Quick Start* on the TV so automations can power it on later.
 
-**1. Download the integration**
+### 1️⃣ Download via HACS
 
-1. Open **HACS** in the sidebar.
-2. Click the **three dots (⋮)** in the bottom right → **Add custom repository**.
-3. Enter and confirm:
-   - *Repository:* `https://github.com/V4n1X/ha_hisense_tv`
-   - *Category:* `Integration`
-4. The repository appears in the HACS list → open it → click **Download**.
+[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=V4n1X&repository=ha_hisense_tv&category=integration)
 
-**2. Restart Home Assistant**
+Click the button, confirm that HACS adds the repository, then click **Download**. Restart Home Assistant afterwards (*Settings → System → Restart*).
 
-5. *Settings → System → Restart* (custom integrations require a full restart).
+<details>
+<summary>Without the button</summary>
 
-**3. Set up the integration**
+1. Open **HACS** → **⋮** (top right) → **Custom repositories**.
+2. Enter `https://github.com/V4n1X/ha_hisense_tv` with category **Integration** and confirm.
+3. Open **Hisense TV** in HACS and click **Download**, then restart Home Assistant.
 
-6. *Settings → Devices & Services* → **Add Integration** in the bottom right.
-7. Search for and select **"Hisense TV"**.
-8. In the dialog:
-   - Leave the *Host/IP* field **empty** → the network is scanned automatically via SSDP → select a discovered TV,
-   - or enter the TV's IP directly (leave the port unchanged: **36669**).
-9. The connection is validated — on newer firmware generations including automatic TLS encryption with the bundled client certificate.
+</details>
 
-**4. PIN pairing on the TV (if requested)**
+### 2️⃣ Add the integration
 
-10. If the TV shows a **4-digit pairing code on screen**, the *"Pair with your TV"* window appears in Home Assistant.
-11. Enter the four digits there. If the code expires on the TV, simply wait a moment until a new one is shown and try again.
-    - No PIN window? Older firmware doesn't require authorization — the setup then closes directly.
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=hisense_tv)
 
-**5. Done**
+Click the button or go to *Settings → Devices & Services → Add Integration* and search for **Hisense TV**. Then either
 
-12. The device is registered with manufacturer, model, firmware version and MAC address. Entities (`media_player`, `remote`, sensors) are available immediately.
+- leave *Host/IP* **empty** to scan the network via SSDP and pick a discovered TV, or
+- enter the TV's IP directly (keep the port at **36669**).
 
-> 📖 Detailed guide with troubleshooting, TV settings and quick tests: [`docs/INSTALLATION.md`](docs/INSTALLATION.md)
+### 3️⃣ Pair with the TV (if requested)
 
-### Pairing & connection problems during setup
+If the TV shows a **4-digit pairing code**, the *"Pair with your TV"* dialog opens in Home Assistant — enter the code there. The code is only valid for about 30 seconds; if it expires, wait for the TV to show a new one and try again. If no PIN dialog appears, the firmware needs no pairing and the setup simply finishes.
 
-| Problem | Solution |
-|---|---|
-| **"Failed to connect"** | Power on the TV (not deep eco standby); test reachability: `telnet <TV-IP> 36669`; rule out VLAN/AP client isolation |
-| **TV not found during scan** | SSDP/multicast is often blocked by mesh Wi-Fi → just enter the IP manually |
-| **Pairing code rejected** (`invalid_pin`) | The code expires on the TV after ~30 seconds → wait until the TV shows a new one, then enter it fresh |
-| **No PIN window** | Older firmware doesn't require authorization — the setup closes automatically, all good |
-| **No code appears on the TV** | The official RemoteNOW/VIDAA app occupies the remote session → close the app completely and retry (details: [INSTALLATION.md](docs/INSTALLATION.md)) |
-| **Pairing fails despite correct code** | TV may have been powered off in the meantime? Cancel setup, power on the TV, add the integration again |
+> [!WARNING]
+> **Close the official RemoteNOW/VIDAA app first.** The TV allows only one active remote session — while the phone app is connected, the TV shows no pairing code.
 
-> After a TV reset or firmware update the pairing can expire: the integration notifies you and walks you through the PIN entry via Reauth.
+🎉 Done — the device is registered with manufacturer, model, firmware and MAC, and all entities are available immediately.
 
-### Manual
+> 📖 Full guide with TV settings, quick tests and more troubleshooting: [`docs/INSTALLATION.md`](docs/INSTALLATION.md)
+
+<details>
+<summary>Manual installation (without HACS)</summary>
 
 ```bash
 git clone https://github.com/V4n1X/ha_hisense_tv /tmp/ha_hisense_tv
@@ -91,24 +90,33 @@ cp -r /tmp/ha_hisense_tv/custom_components/hisense_tv <config>/custom_components
 rm -rf /tmp/ha_hisense_tv
 ```
 
-Then restart HA and continue with step 6 of the HACS instructions.
+Then restart Home Assistant and continue with step 2.
 
-## Changing settings after setup
+</details>
+
+## 🔧 Configuration
 
 | Action | Where |
 |---|---|
 | Change IP/port | *Integration → Configure* (Reconfigure, with revalidation) |
-| Polling/WOL/pacing/button selection | *Integration → Options* |
-| IP changed by DHCP | happens automatically (the TV is recognized by its MAC) |
-| TV was reset / pairing lost | the integration notifies you; Reauth asks for the PIN again |
+| Polling, WOL, command pacing, button selection | *Integration → Options* |
+| IP changed by DHCP | Handled automatically — the TV is recognized by its MAC |
+| TV was reset / pairing lost | The integration notifies you; Reauth asks for the PIN again |
 
-## Remote commands & buttons
+## 🎮 Remote commands & buttons
 
-Besides the `remote` entity the integration also provides quick-action buttons. By default **5 buttons** are created (*Home*, *Back*, *Source*, *Settings*, *Info*) — Power and Wake-on-LAN are deliberately not buttons, as they are already covered by `media_player.turn_on/turn_off`.
+Besides the `remote` entity the integration provides quick-action buttons. By default **5 buttons** are created: *Home*, *Back*, *Source*, *Settings* and *Info*. Power and Wake-on-LAN are deliberately not buttons, as `media_player.turn_on/turn_off` already cover them.
 
-Via *Integration → Options* you can select exactly the buttons you want from **22 available ones** via multi-select — including navigation (*OK*, *Up/Down/Left/Right*), volume/channels (*Volume ±*, *Mute*, *Channel ±*) and app shortcuts (*Netflix*, *YouTube*, *Prime Video*, *Disney+*, *Plex*).
+Via *Integration → Options* you can pick exactly the buttons you want from **22 available ones**:
 
-### Sending keys via service (`remote.send_command`)
+| Group | Buttons |
+|---|---|
+| 🏠 General | *Home*, *Back*, *Menu*, *Info*, *Guide*, *Source*, *Settings* |
+| 🧭 Navigation | *OK*, *Up*, *Down*, *Left*, *Right* |
+| 🔊 Volume & channels | *Volume ±*, *Mute*, *Channel ±* |
+| 🚀 App shortcuts | *Netflix*, *YouTube*, *Prime Video*, *Disney+*, *Plex* |
+
+### Sending keys via `remote.send_command`
 
 ```yaml
 service: remote.send_command
@@ -118,34 +126,48 @@ data:
   command: home
 ```
 
-Multiple keys: `command: ["1", "2"]` or `"back, ok"` · pacing via the `command_delay` option or `delay_secs` · repeat the whole sequence with `num_repeats`.
+- **Multiple keys:** `command: ["1", "2"]` or `"back, ok"`
+- **Pacing:** the `command_delay` option or `delay_secs`
+- **Repeat the whole sequence:** `num_repeats`
 
-> 📋 **All 60+ keys & apps**: full overview of all keys, direct apps, color keys and digits in [`docs/REMOTE_KEYS.md`](docs/REMOTE_KEYS.md).
+> 📋 Full overview of all keys, direct apps, color keys and digits: [`docs/REMOTE_KEYS.md`](docs/REMOTE_KEYS.md)
 
-## Technical details
+## 🩺 Troubleshooting
 
-The complete reverse-engineered protocol (topics, payloads, credential derivation, pairing sequence, discovery, WOL, discrepancies with community sources) is documented in [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
+### 🔌 Setup & pairing
 
-Short version:
-
-- MQTT on `tcp://<TV>:36669`, user `hisenseservice`, password `multimqttservice` (static in every RemoteNOW installation)
-- Commands: `/remoteapp/tv/<service>/<clientId>/actions/<action>` · feedback: `/remoteapp/mobile/broadcast/#` + `/remoteapp/mobile/<clientId>/#`
-- `changevolume` accepts plain numbers (0–100); mute is `KEY_MUTE`
-- Power on via Wake-on-LAN: magic packet 5× every 100 ms to UDP port **33129**
-
-## Troubleshooting (runtime)
-
-Setup and pairing issues are covered above under Installation. Common runtime topics:
-
-| Symptom | Cause/Solution |
+| Symptom | Cause / solution |
 |---|---|
-| Volume/source sensor updates 1–2 s after the command | Intentional: values are **live TV pushes**, not optimistic guesses — the sensor reflects the state the TV actually reports as soon as it confirms (see [docs/PROTOCOL.md](docs/PROTOCOL.md)) |
-| Entities `unavailable` although the TV shows a picture | Broker only reachable in "fast" standby; check eco standby |
-| No volume/state values | Some models only push after the first `getvolume` poll (option: reduce interval) |
-| Powering on via automation fails | Enable "Network Standby/Quick Start" on the TV, otherwise WOL is impossible |
-| Suddenly unresponsive after a TV update | A firmware update can reset the pairing → wait for the Reauth flow and re-enter the PIN |
+| **"Failed to connect"** | Power on the TV (not deep eco standby); test reachability with `telnet <TV-IP> 36669`; rule out VLAN/AP client isolation |
+| **TV not found during scan** | SSDP/multicast is often blocked by mesh Wi-Fi → enter the IP manually |
+| **Pairing code rejected** (`invalid_pin`) | The code expires after ~30 seconds → wait for a new one and enter it fresh |
+| **No code appears on the TV** | The RemoteNOW/VIDAA app occupies the remote session → close it completely and retry |
+| **Pairing fails despite correct code** | The TV may have been powered off in between → cancel, power on the TV, add the integration again |
 
-## Acknowledgements
+### 📡 Runtime
+
+| Symptom | Cause / solution |
+|---|---|
+| Entities `unavailable` although the TV shows a picture | The broker is only reachable in "fast" standby; check eco standby |
+| Powering on via automation fails | Enable *Network Standby / Quick Start* on the TV, otherwise Wake-on-LAN is impossible |
+| Volume/source sensor updates 1–2 s after a command | Intentional: values are **live TV pushes**, not optimistic guesses (see [`docs/PROTOCOL.md`](docs/PROTOCOL.md)) |
+| No volume/state values | Some models only push after the first `getvolume` poll → reduce the polling interval in the options |
+| Unresponsive after a TV update | A firmware update can reset the pairing → wait for the Reauth notification and re-enter the PIN |
+
+## 🔬 Technical details
+
+The complete reverse-engineered protocol (topics, payloads, credential derivation, pairing sequence, discovery, WOL, discrepancies with community sources) is documented in [`docs/PROTOCOL.md`](docs/PROTOCOL.md). In short:
+
+- **Transport:** MQTT on `tcp://<TV>:36669`, user `hisenseservice`, password `multimqttservice` (static in every RemoteNOW installation)
+- **Topics:** commands go to `/remoteapp/tv/<service>/<clientId>/actions/<action>`, feedback comes from `/remoteapp/mobile/broadcast/#` and `/remoteapp/mobile/<clientId>/#`
+- **Volume & mute:** `changevolume` accepts plain numbers (0–100); mute is `KEY_MUTE`
+- **Power on:** Wake-on-LAN magic packet, 5× every 100 ms to UDP port **33129**
+
+## 🔖 Changelog
+
+Release notes for every version are published on the [Releases page](https://github.com/V4n1X/ha_hisense_tv/releases).
+
+## 🙏 Acknowledgements
 
 The reverse-engineering community this project builds upon:
 
@@ -154,125 +176,6 @@ The reverse-engineering community this project builds upon:
 - [newAM/hisensetv_hass](https://github.com/newAM/hisensetv_hass)
 - [d3nd3/Hisense-mqtt-keyfiles](https://github.com/d3nd3/Hisense-mqtt-keyfiles)
 
-## Changelog
-
-### 1.5.0
-
-**Fixed**
-
-- **Reconfigure (change IP) always failed:** Home Assistant rejects creating a new entry from a reconfigure flow. Reconfigure and Reauth now update the existing entry in place and reload it.
-- **Already configured TVs were offered again:** a DHCP lease renewal of a registered TV opened a new "discovered" setup card (and crashed when SSDP found nothing), and an IP change was never applied. DHCP now follows the IP change of the configured TV silently. TVs added by IP now get their MAC as unique id, and SSDP/manual setup recognize an existing TV by MAC or host instead of adding it twice.
-- **Abandoned pairing kept a connection open:** closing the PIN dialog left the probe MQTT connection (with its reconnect loop) running until Home Assistant restarted.
-- **Pairing could time out with the correct PIN** when the TV pushed more than 64 messages while the PIN dialog was open (event ring markers were list indices).
-- **`turn_on` switched a running TV off** (`KEY_POWER` is a toggle) — media player and remote now only send it to a TV in fake sleep; `turn_off` on an offline TV is a no-op instead of an error. `remote.turn_off` was missing entirely.
-- **`media_player.volume_mute` ignored the requested state:** `mute: true` on a muted TV unmuted it. The toggle is now only sent when the TV reports the other state.
-- **`remote.send_command` ignored `num_repeats`.**
-- **State lagged up to one poll interval** after the TV went offline or came back: connection changes now update the entities immediately.
-- **Duplicate device** when a TV added by IP later revealed its MAC (or a raw/formatted MAC spelling changed): the existing device is moved to the new identifier.
-- Firmware version feedback now updates the device card immediately; a failed platform unload no longer stops the connection; an invalid stored MAC no longer blocks Wake-on-LAN on the other MAC; volume/mute/source/button commands on an offline TV report the translated "TV not connected" error, an unknown source raises a validation error.
-
-**Changed**
-
-- **"Pairing lost" uses Home Assistant's built-in reauth repair issue** instead of an own one. The own issue was global (one TV's re-pair dismissed another TV's notice) and its fix button opened a second reauth flow.
-- `capability.device_id` is redacted in diagnostics.
-- Validation schemas use `probatio`, Home Assistant's validation library since 2026.9 (`voluptuous` is only an alias there).
-
-**Added**
-
-- Tests against a real Home Assistant core (`tests/test_ha_*.py`): config flows through HA's flow manager, entity behaviour and entry setup. Coverage with real HA rises from 45 % to 72 %.
-
-### 1.4.0
-
-**Changed**
-
-- **Minimum Home Assistant version raised to 2026.9**. The integration now uses the new device-registry API `async_get_device_by_identifier` introduced with the 2026.9 device-registry rework; the deprecated `async_get_device` fallback for older versions was removed.
-- **Code style is now enforced by ruff** (lint and format) using Home Assistant's official rule set, replacing the bare pyflakes check. CI verifies both lint and formatting; run locally with `python -m ruff check .` and `python -m ruff format .`.
-- **Pre-commit hooks** run ruff lint, ruff format and the encoding check before every commit — the same verdicts CI enforces. Enable once per clone with `pip install pre-commit && pre-commit install`.
-- **CI now runs on Python 3.14** and installs `homeassistant>=2026.9`. Home Assistant 2026.3 and newer require Python 3.14.2+, so on Python 3.13 the smoke test silently ran against HA 2026.2.
-
-**Fixed**
-
-- **SSDP scan never received any reply** ([#1](https://github.com/V4n1X/ha_hisense_tv/pull/1), thanks [@Anzic23](https://github.com/Anzic23)): `async_scan()` `connect()`ed its UDP socket to the multicast group, so the kernel dropped every unicast M-SEARCH reply. For a TV added by IP this meant the background enrichment never learned the MAC addresses and Wake-on-LAN stayed a no-op. The scan now binds locally, sends to the group explicitly and uses one datagram per search target.
-
-**Added**
-
-- **Coverage measurement** for the stub-mode unit suite (`pytest-cov`, branch coverage over `custom_components/hisense_tv`). CI prints missing lines and runs `scripts/coverage_gaps.py`, which maps uncovered lines to named functions/steps, and fails when line coverage drops below a ratchet threshold (`--cov-fail-under`). Locally: `python -m pytest tests --ignore=tests/test_ha_smoke.py --cov --cov-report=term-missing` then `python scripts/coverage_gaps.py` for the per-function gap report.
-- `defusedxml` runtime dependency for safely parsing untrusted UPnP device descriptions (XML entity-expansion hardening).
-- **Deprecation canary** (`scripts/deprecation_canary.py`, run by `tests/test_ha_smoke.py` in CI): boots a minimal real Home Assistant, sets the integration up, injects one capability push message (the code path that patches the device registry) and fails when Home Assistant reports deprecated API usage or a blocking call for `hisense_tv`.
-- Unit tests for the SSDP scan (unicast replies from the device's own address) and for the device-metadata helpers in `__init__.py` (background enrichment, registry refresh).
-
-### 1.3.6
-
-**Changed**
-
-- **Removed the optimistic state updates introduced in 1.3.5:** volume up/down, mute and source selection no longer pre-write an assumed state — sensors always show the **live values the TV actually reports** via its push feedback (see the troubleshooting table). The TV's 1–2 s volume push delay is intentional and now documented. (The direct volume slider, `volume_set`, keeps its existing pre-existing echo behaviour.)
-
-### 1.3.5
-
-**Fixed / improved**
-
-- **Hardware info now persists in the config entry:** the chip platform reported via capability is stored once in the entry data, so `hw_version` survives HA restarts, fresh registry devices and entry re-imports even when the TV is powered off (the device registry already persisted it before, but a newly created device needed the TV on once)
-- **Sensor icons:** volume, source and TV state sensors now carry proper icons (`mdi:volume-high`, `mdi:video-input-hdmi`, `mdi:information-outline`) instead of the generic eye
-- **Instant source feedback:** selecting an input or app updates the source sensor immediately (optimistic), the TV's sourceswitch push corrects if needed
-- **Instant volume/mute feedback:** volume up/down and mute now apply an optimistic single step instead of waiting 1–2 s for the TV's volumechange push
-
-### 1.3.4
-
-**New**
-
-- **Installed TV apps in the source selector:** the media player's source list now combines HDMI/TV inputs **and the apps installed on the TV** — selecting an app (e.g. *Netflix*) launches it via the protocol's `launchapp` action. The app list is actively requested on every reconnect (same robust mechanics as the source list: throttled retries, dedupe, defensive parsing of firmware-specific JSON variants) and was previously received but unused
-
-### 1.3.3
-
-**Fixed**
-
-- **Source select stayed empty:** the media player requested the TV's source list only once (permanent one-shot flag). If that single request silently failed — e.g. while the TV was still waking up after the offline setup — the source select stayed empty forever. The request now retries with a 60 s throttle, and the integration additionally requests the source list on **every reconnect** (same mechanism as the 1.3.2 capability fix)
-
-### 1.3.2
-
-**Fixed**
-
-- **Hardware info missing on the device card after 1.3.x:** since setup now completes while the TV is powered off, the one-shot capability request during setup never ran — so `chip_platform`/`hw_version` stayed empty. The integration now re-requests capability and app version on **every reconnect** (throttled to once per minute), so hardware/firmware metadata populates even when HA started with the TV off
-- SSDP background enrichment now also backfills the chip **platform** and **transport protocol** into the config entry when they were missing
-
-### 1.3.1
-
-**Fixed**
-
-- **Setup crash (`NameError: CONF_MAC_WIFI`)** after a config-entry reload when the entry had no stored MAC addresses — the background metadata-enrichment path referenced constants that were accidentally removed during the 1.3.0 refactor
-- **App-version feedback ignored**: a missing constant import made the integration drop every `/appversion` push from the TV
-- **Blocking call warning**: the TLS client certificate is now loaded in an executor thread instead of blocking the event loop at setup
-
-**Added**
-
-- Static `pyflakes` gate in CI (would have caught both crashes above) plus a repo-wide encoding sanity test
-- CI actions updated (checkout v7, setup-python v7), README header with Hisense logo and badges
-
-### 1.3.0
-
-**New**
-
-- **Button selection via options flow:** Only 5 buttons by default (*Home*, *Back*, *Source*, *Settings*, *Info*); via the integration options you can multi-select exactly the ones you want from 22 available keys (navigation, volume/channels, app shortcuts)
-- **"Pairing lost" repair flow:** After a TV reset or firmware update a repair notification appears in *Settings → System → Repairs* that leads straight into PIN re-pairing
-- **TV may be powered off at HA start:** The "Setup error, will retry" failure when the TV is off is gone — setup completes, the reconnect loop retries in the background, and **Wake-on-LAN works even after an HA restart with the TV powered off**
-
-**Fixed**
-
-- **Stable device identity:** The `unique_id` is now based on the MAC (instead of the client UUID that changes on re-pairing) — no more duplicate device after Reauth
-- **Proper error messages:** "TV not connected" is reported as a translated error instead of a raw `NotConnected` exception (affects off/volume/playback control and `remote.send_command`)
-
-**Improved**
-
-- Shared entity base (`entity.py`) removes duplicated code across all platform files (device info, WOL logic)
-- Background task via `entry.async_create_background_task` (HA-managed reference tracking)
-- Backwards-compatible translations (de/en) incl. `exceptions` schema, hassfest validation passes cleanly
-- `aiomqtt` requirement capped (`>=2.0.0,<3.0.0`)
-- Tested against Home Assistant 2026.8 (all modules import without deprecation warnings)
-
-### 1.2.4
-
-Last release before this changelog — see [v1.2.4](https://github.com/V4n1X/ha_hisense_tv/releases/tag/v1.2.4).
-
-## License
+## 📄 License
 
 MIT — see [LICENSE](LICENSE).
