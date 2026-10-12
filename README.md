@@ -18,7 +18,7 @@ Custom integration that controls Hisense VIDAA TVs via the **MQTT broker embedde
 |---|---|---|
 | 📺 | `media_player` | On/off, volume set/mute, play/pause/stop, next/previous track, source selection (HDMI/TV/…) **plus installed apps** — picking an app in the source selector launches it on the TV |
 | 🎮 | `remote` | All 60+ remote keys via `remote.send_command` |
-| 📊 | `sensor` | Volume (%), active source, TV state (incl. fake sleep/screen state) and diagnostic attributes (firmware, chip platform, capabilities) |
+| 📊 | `sensor` | Volume (%), active source, TV state (`sourceswitch`, `app`, `livetv`, … incl. fake sleep/screen state) and diagnostic attributes (firmware, chip platform, capabilities) |
 | 🔘 | `button` | Quick-action buttons for the most common keys, selectable in the options |
 
 **Under the hood**
@@ -111,9 +111,9 @@ Via *Integration → Options* you can pick exactly the buttons you want from **2
 
 | Group | Buttons |
 |---|---|
-| 🏠 General | *Home*, *Back*, *Menu*, *Info*, *Guide*, *Source*, *Settings* |
+| 🏠 General | *Home*, *Back*, *Menu*, *Info*, *Guide (EPG)*, *Source*, *Settings* |
 | 🧭 Navigation | *OK*, *Up*, *Down*, *Left*, *Right* |
-| 🔊 Volume & channels | *Volume ±*, *Mute*, *Channel ±* |
+| 🔊 Volume & channels | *Volume up*, *Volume down*, *Mute*, *Channel up*, *Channel down* |
 | 🚀 App shortcuts | *Netflix*, *YouTube*, *Prime Video*, *Disney+*, *Plex* |
 
 ### Sending keys via `remote.send_command`
