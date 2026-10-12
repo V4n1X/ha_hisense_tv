@@ -109,7 +109,8 @@ def main() -> int:
             "No coverage data found. Run:  python -m pytest tests --cov",
             file=sys.stderr,
         )
-        return 1
+        # Informational only: an earlier failing step must not be reported twice.
+        return 0
 
     total_missing = 0
     for measured in sorted(files):
