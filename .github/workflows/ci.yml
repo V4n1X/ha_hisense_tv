@@ -27,7 +27,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13"]
+        # Home Assistant 2026.3 and newer require Python >= 3.14.2. On 3.13 pip
+        # silently resolves `homeassistant` to 2026.2.x, which would test (and
+        # canary) an HA release older than the supported minimum.
+        python-version: ["3.14"]
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -51,17 +54,45 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements_test.txt
 
-      - name: Static undefined-name / unused-import check (pyflakes)
-        run: python -m pyflakes custom_components tests scripts
+      # Home Assistant's official ruff rule set (mirrored in pyproject.toml).
+      # Replaces the former bare pyflakes check: same static guarantees plus
+      # HA-specific rules (imports, async, logging, security, docstrings).
+      - name: Lint (ruff, Home Assistant rule set)
+        run: python -m ruff check custom_components tests scripts
 
+      # Same formatter Home Assistant core uses; --check fails when any file
+      # is not formatted (fix locally with: python -m ruff format .)
+      - name: Format check (ruff format)
+        run: python -m ruff format --check custom_components tests scripts
+
+      # --cov measures custom_components/hisense_tv only (see pyproject.toml
+      # [tool.coverage.*]). fail-under is a ratchet: raise it as coverage grows,
+      # it only guarantees the suite cannot silently regress below the baseline.
       - name: Run unit tests (no Home Assistant required)
-        run: python -m pytest tests --ignore=tests/test_ha_smoke.py -q --tb=short
+        run: >-
+          python -m pytest tests --ignore=tests/test_ha_smoke.py -q --tb=short
+          --cov --cov-report=term-missing --cov-fail-under=44.0
+
+      # Informational: maps the missing lines to named functions/steps so the
+      # log shows WHICH code paths the suite does not reach (dev aid:
+      # scripts/coverage_gaps.py against a local .coverage file).
+      - name: Surface uncovered integration code paths
+        run: python scripts/coverage_gaps.py
+        if: success() || failure()
 
       - name: Install Home Assistant (cached wheels)
         run: pip install -r requirements_ci.txt
 
       - name: Run full-import smoke test against real Home Assistant
-        run: python -m pytest tests/test_ha_smoke.py -v --tb=short
+        run: >-
+          python -m pytest tests/test_ha_smoke.py -v --tb=short
+          --deselect tests/test_ha_smoke.py::test_setup_triggers_no_ha_deprecation_warnings
+
+      # Fails when HA itself reports deprecated API usage (e.g. new device
+      # registry deprecations in a fresh release) or blocking calls in the
+      # event loop during the full setup of the integration.
+      - name: Deprecation canary (full setup against real Home Assistant)
+        run: python -m pytest tests/test_ha_smoke.py::test_setup_triggers_no_ha_deprecation_warnings -v --tb=short
 
   hassfest:
     name: Hassfest validation

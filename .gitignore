@@ -22,3 +22,12 @@ Thumbs.db
 config/home-assistant*
 config/.storage/
 config/deps/
+
+# local git backups (git bundle)
+*.bundle
+
+# coverage.py data files
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
