@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import timedelta
+import logging
 from typing import TYPE_CHECKING
 
 from homeassistant.core import HomeAssistant
@@ -22,14 +22,13 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-
 @dataclass(slots=True)
 class RuntimeData:
     """Everything the entity platforms need, stored on entry.runtime_data."""
 
-    client: "HisenseTvClient"
-    coordinator: "HisenseTvCoordinator"
-    state: "TvState"
+    client: HisenseTvClient
+    coordinator: HisenseTvCoordinator
+    state: TvState
 
 
 class HisenseTvCoordinator(DataUpdateCoordinator["TvState"]):
@@ -52,6 +51,7 @@ class HisenseTvCoordinator(DataUpdateCoordinator["TvState"]):
         client: HisenseTvClient,
         state: TvState,
     ) -> None:
+        """Configure the poll interval from the entry options."""
         self.client = client
         self.state = state
         try:

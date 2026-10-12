@@ -15,7 +15,6 @@ from hisense_tv.repairs import (
     async_delete_pairing_lost_issue,
 )
 
-
 # ---------------------------------------------------------------------------
 # fakes
 # ---------------------------------------------------------------------------
@@ -31,6 +30,7 @@ class FakeEntry:
     data: dict = None
 
     def __post_init__(self) -> None:
+        """Fill in a default data payload when none was provided."""
         if self.data is None:
             self.data = {"host": "1.2.3.4", "port": 36669}
 
@@ -39,6 +39,7 @@ class FakeIssueRegistry:
     """In-memory stand-in for the issue registry."""
 
     def __init__(self) -> None:
+        """Start with an empty issue store."""
         self.issues: dict[tuple[str, str], dict] = {}
 
     def async_create_issue(
@@ -54,6 +55,7 @@ class FakeIssueRegistry:
         data=None,
         **_kwargs,
     ) -> None:
+        """Record an issue keyed by (domain, issue_id)."""
         self.issues[(domain, issue_id)] = {
             "domain": domain,
             "issue_id": issue_id,
@@ -65,6 +67,7 @@ class FakeIssueRegistry:
         }
 
     def async_get_issue(self, domain: str, issue_id: str):
+        """Return a namespace stand-in for the stored issue."""
         item = self.issues.get((domain, issue_id))
         if item is None:
             return None
@@ -90,6 +93,7 @@ class FakeIssueRegistry:
         data=None,
         **_kwargs,
     ) -> None:
+        """Alias mirroring the real registry's upsert name."""
         self.issues[(domain, issue_id)] = {
             "domain": domain,
             "issue_id": issue_id,
@@ -101,6 +105,7 @@ class FakeIssueRegistry:
         }
 
     def async_delete(self, domain: str, issue_id: str) -> None:
+        """Remove the issue; missing keys are a no-op."""
         self.issues.pop((domain, issue_id), None)
 
 
@@ -108,20 +113,25 @@ class FakeConfigEntries:
     """Stand-in for hass.config_entries with a tiny in-memory store."""
 
     def __init__(self) -> None:
+        """Start with an empty entry store."""
         self.entries: dict[str, object] = {}
         self.init_calls: list[tuple] = []
 
     def async_get_entry(self, entry_id: str):
+        """Look up an entry by id."""
         return self.entries.get(entry_id)
 
     @property
     def flow(self):
+        """Expose self as the flow manager (async_init lives here)."""
         return self
 
     async def async_init(self, domain, *, context=None, data=None, **_kw):
+        """Record the call and return a synthetic form result."""
         return await self.async_init_flow(domain, context=context, data=data)
 
     async def async_init_flow(self, domain, *, context=None, data=None, **_kw):
+        """Record the call and return a synthetic form result."""
         self.init_calls.append((domain, context, data))
         return {"type": "form", "flow_id": "reauth-flow", "context": context}
 
@@ -130,18 +140,20 @@ class FakeHass:
     """Minimal hass stand-in exposing the registries the repairs flow touches."""
 
     def __init__(self) -> None:
+        """Wire the registries the repairs flow touches."""
         self.issue_registry = FakeIssueRegistry()
         self.config_entries = FakeConfigEntries()
         self.created_tasks: list[object] = []
 
     def async_create_task(self, coro):
+        """Keep the coroutine without scheduling it."""
         self.created_tasks.append(coro)
         return coro
 
 
 @pytest.fixture
 def fake_hass(monkeypatch):
-    """Wire a FakeHass into the issue registry helpers used by repairs."""
+    """Patch ir.async_get to return the FakeHass issue registry."""
     from homeassistant.helpers import issue_registry as ir
 
     hass = FakeHass()
@@ -151,6 +163,7 @@ def fake_hass(monkeypatch):
 
 @pytest.fixture
 def fake_entry():
+    """Provide a minimal FakeEntry."""
     return FakeEntry()
 
 
@@ -160,6 +173,7 @@ def fake_entry():
 
 
 def test_create_pairing_lost_issue(fake_hass, fake_entry):
+    """The issue is created fixable with a translated name placeholder."""
     async_create_pairing_lost_issue(fake_hass, fake_entry)
 
     key = (DOMAIN, ISSUE_PAIRING_LOST)
@@ -172,6 +186,7 @@ def test_create_pairing_lost_issue(fake_hass, fake_entry):
 
 
 def test_create_issue_is_idempotent(fake_hass, fake_entry):
+    """Creating twice keeps a single issue."""
     async_create_pairing_lost_issue(fake_hass, fake_entry)
     async_create_pairing_lost_issue(fake_hass, fake_entry)
 
@@ -182,6 +197,7 @@ def test_create_issue_is_idempotent(fake_hass, fake_entry):
 
 
 def test_delete_pairing_lost_issue(fake_hass):
+    """Deleting removes the stored issue."""
     fake_hass.issue_registry.issues[(DOMAIN, ISSUE_PAIRING_LOST)] = {
         "data": {"entry_id": "entry-1"}
     }
@@ -192,6 +208,7 @@ def test_delete_pairing_lost_issue(fake_hass):
 
 
 def test_delete_issue_when_absent_is_noop(fake_hass):
+    """Deleting an unknown issue must not raise."""
     # must not raise even if the issue was never created
     async_delete_pairing_lost_issue(fake_hass, "entry-unknown")
     assert fake_hass.issue_registry.issues == {}
@@ -204,6 +221,7 @@ def test_delete_issue_when_absent_is_noop(fake_hass):
 
 @pytest.mark.asyncio
 async def test_create_fix_flow_returns_pairing_flow():
+    """The known issue id returns a PairingLostRepairFlow carrying the data."""
     flow = await async_create_fix_flow(None, ISSUE_PAIRING_LOST, {"entry_id": "e1"})
 
     assert isinstance(flow, PairingLostRepairFlow)
@@ -212,6 +230,7 @@ async def test_create_fix_flow_returns_pairing_flow():
 
 @pytest.mark.asyncio
 async def test_create_fix_flow_unknown_issue_returns_none():
+    """Unknown issue ids get no fix flow."""
     flow = await async_create_fix_flow(None, "some_other_issue", {"entry_id": "e1"})
     assert flow is None
 
@@ -222,6 +241,7 @@ async def test_create_fix_flow_unknown_issue_returns_none():
 
 
 def _make_flow(fake_hass, fake_entry):
+    """Build a PairingLostRepairFlow wired to the fakes."""
     flow = PairingLostRepairFlow()
     flow.handler = DOMAIN
     flow.issue_id = ISSUE_PAIRING_LOST
@@ -233,6 +253,7 @@ def _make_flow(fake_hass, fake_entry):
 
 @pytest.mark.asyncio
 async def test_repair_init_shows_confirm_form(fake_hass, fake_entry):
+    """With no user input the flow shows the confirm form with placeholders."""
     flow = _make_flow(fake_hass, fake_entry)
     fake_hass.issue_registry.async_get_or_create(
         DOMAIN,
@@ -252,6 +273,7 @@ async def test_repair_init_shows_confirm_form(fake_hass, fake_entry):
 
 @pytest.mark.asyncio
 async def test_repair_confirm_starts_reauth_and_resolves_issue(fake_hass, fake_entry):
+    """Confirming schedules the reauth flow for the right entry."""
     flow = _make_flow(fake_hass, fake_entry)
 
     result = await flow.async_step_init({})
@@ -271,6 +293,7 @@ async def test_repair_confirm_starts_reauth_and_resolves_issue(fake_hass, fake_e
 
 @pytest.mark.asyncio
 async def test_repair_confirm_with_missing_entry_still_dismisses(fake_hass):
+    """A vanished entry still dismisses the issue, without scheduling reauth."""
     flow = PairingLostRepairFlow()
     flow.handler = DOMAIN
     flow.issue_id = ISSUE_PAIRING_LOST

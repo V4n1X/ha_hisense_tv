@@ -52,7 +52,9 @@ def test_parse_app_list_wrapped_dict():
 
 def test_parse_app_list_dedupe_case_insensitive():
     """Duplicate apps (any casing) appear exactly once."""
-    payload = json.dumps([{"name": "Netflix"}, {"name": "netflix"}, {"name": "YouTube"}])
+    payload = json.dumps(
+        [{"name": "Netflix"}, {"name": "netflix"}, {"name": "YouTube"}]
+    )
     apps = AppInfo.parse_list(payload)
     assert [app.name for app in apps] == ["Netflix", "YouTube"]
 
@@ -73,6 +75,7 @@ def test_parse_app_list_skips_entries_without_name():
 
 
 def test_apply_apps_stores_list_and_reports_change():
+    """apply_apps stores the list and reports change-vs-identical."""
     state = TvState()
     apps = [AppInfo(name="Netflix"), AppInfo(name="YouTube")]
     assert state.apply_apps(apps) is True

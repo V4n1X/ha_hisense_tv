@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from hisense_tv.button import (
-    BUTTON_DESCRIPTIONS,
-    selected_button_descriptions,
-)
+from hisense_tv.button import BUTTON_DESCRIPTIONS, selected_button_descriptions
 from hisense_tv.const import CONF_BUTTONS, DEFAULT_BUTTONS, KEY_COMMANDS
 
 
@@ -34,11 +31,15 @@ def test_default_buttons_are_valid_subset():
 def test_defaults_create_only_default_buttons():
     """Without options, exactly the default buttons are created."""
     descs = selected_button_descriptions({})
-    assert [d.key for d in descs] == [key for key in BUTTON_DESCRIPTIONS_KEYS_DEFAULT()]
+    assert [d.key for d in descs] == list(BUTTON_DESCRIPTIONS_KEYS_DEFAULT())
 
 
-def BUTTON_DESCRIPTIONS_KEYS_DEFAULT():  # noqa: N802 - helper kept local
-    return [d.key for d in selected_button_descriptions({CONF_BUTTONS: list(DEFAULT_BUTTONS)})]
+def BUTTON_DESCRIPTIONS_KEYS_DEFAULT():
+    """Keys created with the default options."""
+    return [
+        d.key
+        for d in selected_button_descriptions({CONF_BUTTONS: list(DEFAULT_BUTTONS)})
+    ]
 
 
 def test_options_filter_selection():
@@ -49,7 +50,9 @@ def test_options_filter_selection():
 
 def test_options_filter_unknown_keys_ignored():
     """Unknown keys (e.g. removed buttons from older versions) are dropped."""
-    descs = selected_button_descriptions({CONF_BUTTONS: ["home", "wake_on_lan", "power", "bogus"]})
+    descs = selected_button_descriptions(
+        {CONF_BUTTONS: ["home", "wake_on_lan", "power", "bogus"]}
+    )
     assert [d.key for d in descs] == ["home"]
 
 

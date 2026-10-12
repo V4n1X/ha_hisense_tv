@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.core import HomeAssistant
 
 from .const import CONF_UUID, DOMAIN
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
+    from .__init__ import HisenseConfigEntry
 
 REDACT_KEYS = {"client_id", CONF_UUID, "mac_wifi", "mac_ethernet", "udn"}
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry
-) -> dict[str, Any]:  # noqa: ANN001 - HisenseConfigEntry
+    hass: HomeAssistant, entry: HisenseConfigEntry
+) -> dict[str, Any]:
     """Return diagnostics for a config entry (credentials redacted)."""
     runtime = getattr(entry, "runtime_data", None)
     state = runtime.state if runtime is not None else None

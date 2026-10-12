@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from homeassistant.components.sensor import (
-    SensorEntity,
-    SensorStateClass,
-)
+from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.const import PERCENTAGE
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .entity import HisenseTvEntity
 
@@ -20,7 +19,11 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass, entry: "HisenseConfigEntry", async_add_entities) -> None:  # noqa: ANN001
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: HisenseConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
     """Set up Hisense TV sensors from a config entry."""
     async_add_entities(
         [
@@ -34,12 +37,14 @@ async def async_setup_entry(hass, entry: "HisenseConfigEntry", async_add_entitie
 class _HisenseSensorBase(HisenseTvEntity, SensorEntity):
     """Common plumbing: shared device + availability tied to the connection."""
 
-    def __init__(self, entry: "HisenseConfigEntry", suffix: str) -> None:
+    def __init__(self, entry: HisenseConfigEntry, suffix: str) -> None:
+        """Wire the sensor to the shared TvState of the entry."""
         super().__init__(entry, suffix)
         self._state_obj = entry.runtime_data.state
 
     @property
     def available(self) -> bool:
+        """Sensors go unavailable while the TV is offline (stale values)."""
         return self._client.connected
 
 
@@ -51,11 +56,13 @@ class HisenseVolumeSensor(_HisenseSensorBase):
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, entry: "HisenseConfigEntry") -> None:
+    def __init__(self, entry: HisenseConfigEntry) -> None:
+        """Create the volume sensor."""
         super().__init__(entry, "volume")
 
     @property
     def native_value(self) -> int | None:
+        """Current volume level (0-100) or None while unknown."""
         return self._state_obj.volume_level
 
 
@@ -65,11 +72,13 @@ class HisenseSourceSensor(_HisenseSensorBase):
     _attr_translation_key = "source"
     _attr_icon = "mdi:video-input-hdmi"
 
-    def __init__(self, entry: "HisenseConfigEntry") -> None:
+    def __init__(self, entry: HisenseConfigEntry) -> None:
+        """Create the source sensor."""
         super().__init__(entry, "source")
 
     @property
     def native_value(self) -> str | None:
+        """Label of the active source, or the raw source name fallback."""
         current = self._state_obj.current_source()
         if current is not None:
             return current.label
@@ -83,15 +92,18 @@ class HisenseStateSensor(_HisenseSensorBase):
     _attr_icon = "mdi:information-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, entry: "HisenseConfigEntry") -> None:
+    def __init__(self, entry: HisenseConfigEntry) -> None:
+        """Create the diagnostic tv_state sensor."""
         super().__init__(entry, "tv-state")
 
     @property
     def native_value(self) -> str | None:
+        """Raw statetype string pushed by the TV."""
         return self._state_obj.tv_state
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
+        """Expose capability details as diagnostic attributes."""
         cap = self._state_obj.capability
         attrs: dict[str, object] = {
             "app_version": self._state_obj.app_version,

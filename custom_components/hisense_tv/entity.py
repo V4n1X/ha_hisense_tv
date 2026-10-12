@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from .__init__ import HisenseConfigEntry
 
 
-def entry_unique_id(entry: "HisenseConfigEntry") -> str:
+def entry_unique_id(entry: HisenseConfigEntry) -> str:
     """Stable unique id: MAC first (device identity), else UDN, else uuid, else host.
 
     The client UUID is an MQTT handle, not a device identity: re-pairing (reauth)
@@ -49,7 +49,7 @@ def entry_unique_id(entry: "HisenseConfigEntry") -> str:
     )
 
 
-def device_connections(entry: "HisenseConfigEntry") -> set[tuple[str, str]]:
+def device_connections(entry: HisenseConfigEntry) -> set[tuple[str, str]]:
     """MAC connections for the device registry."""
     connections: set[tuple[str, str]] = set()
     for key in (CONF_MAC_WIFI, CONF_MAC_ETHERNET):
@@ -59,12 +59,16 @@ def device_connections(entry: "HisenseConfigEntry") -> set[tuple[str, str]]:
     return connections
 
 
-def build_device_info(entry: "HisenseConfigEntry") -> dr.DeviceInfo:
+def build_device_info(entry: HisenseConfigEntry) -> dr.DeviceInfo:
     """Shared DeviceInfo so every entity lands on one registry device."""
     data = entry.data
     model = str(data.get(CONF_MODEL_NAME) or "").strip() or DEFAULT_NAME
     sw_version = str(data[CONF_TV_VERSION]) if data.get(CONF_TV_VERSION) else None
-    hw_version = f"platform {data[CONF_PLATFORM_VERSION]}" if data.get(CONF_PLATFORM_VERSION) else None
+    hw_version = (
+        f"platform {data[CONF_PLATFORM_VERSION]}"
+        if data.get(CONF_PLATFORM_VERSION)
+        else None
+    )
     if data.get(CONF_CHIP_PLATFORM):
         hw_version = f"chip {data[CONF_CHIP_PLATFORM]}"
     runtime = getattr(entry, "runtime_data", None)
@@ -98,7 +102,8 @@ class HisenseTvEntity(CoordinatorEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, entry: "HisenseConfigEntry", unique_suffix: str) -> None:
+    def __init__(self, entry: HisenseConfigEntry, unique_suffix: str) -> None:
+        """Attach to the entry's runtime data and derive the unique id."""
         runtime = entry.runtime_data
         super().__init__(runtime.coordinator)
         self._entry = entry

@@ -10,6 +10,7 @@ from hisense_tv.const import (
 
 
 def test_friendly_names_resolve():
+    """Common remote names map to their wire keys."""
     assert resolve_key("power") == "KEY_POWER"
     assert resolve_key("home") == "KEY_HOME"
     assert resolve_key("mute") == "KEY_MUTE"
@@ -17,6 +18,7 @@ def test_friendly_names_resolve():
 
 
 def test_aliases_resolve_to_apk_keys():
+    """Community spellings map to firmware-verified keys, never passthrough."""
     # Community docs say KEY_BACK; the APK only knows these two:
     assert resolve_key("back") == "KEY_RETURNS"
     assert resolve_key("key_back") == "KEY_RETURNS"
@@ -27,6 +29,7 @@ def test_aliases_resolve_to_apk_keys():
 
 
 def test_app_and_number_keys():
+    """App shortcuts and digit keys resolve as expected."""
     assert resolve_key("netflix") == "KEY_NETFLIX"
     assert resolve_key("youtube") == "KEY_YOUTUBE"
     assert resolve_key("prime") == "KEY_PRIME"
@@ -38,17 +41,20 @@ def test_app_and_number_keys():
 
 
 def test_unknown_and_empty():
+    """Unknown, empty and whitespace-only tokens resolve to None."""
     assert resolve_key("bogus") is None
     assert resolve_key("") is None
     assert resolve_key("   ") is None
 
 
 def test_all_command_map_targets_are_valid_wire_keys():
+    """Every KEY_COMMANDS target must be a KEY_* token."""
     for friendly, wire in KEY_COMMANDS.items():
         assert wire.startswith("KEY_"), friendly
 
 
 def test_topic_builders_match_reverse_engineered_scheme():
+    """Topic builders reproduce the app's exact topic layout."""
     cid = "AA:BB:CC:DD:EE:FF$normal"
     assert (
         tv_action("remote_service", cid, "sendkey")

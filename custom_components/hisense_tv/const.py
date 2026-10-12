@@ -156,14 +156,12 @@ KEY_COMMANDS: dict[str, str] = {
     "sleep": "KEY_SLEEP",
     "picture": "KEY_PICTURE",
     "sound": "KEY_SOUND",
-
     # Volume & Channel
     "volume_up": "KEY_VOLUMEUP",
     "volume_down": "KEY_VOLUMEDOWN",
     "mute": "KEY_MUTE",
     "channel_up": "KEY_CHANNELUP",
     "channel_down": "KEY_CHANNELDOWN",
-
     # Media Playback
     "play": "KEY_PLAY",
     "pause": "KEY_PAUSE",
@@ -175,13 +173,11 @@ KEY_COMMANDS: dict[str, str] = {
     "record": "KEY_RECORD",
     "zoom_in": "KEY_ZOOMIN",
     "zoom_out": "KEY_ZOOMOUT",
-
     # Color Buttons
     "red": "KEY_RED",
     "green": "KEY_GREEN",
     "yellow": "KEY_YELLOW",
     "blue": "KEY_BLUE",
-
     # Number Keys
     "0": "KEY_0",
     "1": "KEY_1",
@@ -193,7 +189,6 @@ KEY_COMMANDS: dict[str, str] = {
     "7": "KEY_7",
     "8": "KEY_8",
     "9": "KEY_9",
-
     # Quick App Launch Keys (Hardware Remote shortcuts)
     "netflix": "KEY_NETFLIX",
     "youtube": "KEY_YOUTUBE",

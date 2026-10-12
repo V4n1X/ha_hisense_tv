@@ -11,9 +11,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import voluptuous as vol
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.helpers import issue_registry as ir
+import voluptuous as vol
 
 from .const import DOMAIN
 
@@ -27,8 +27,8 @@ ISSUE_PAIRING_LOST = "pairing_lost"
 
 
 def async_create_pairing_lost_issue(
-    hass: "HomeAssistant",
-    entry: "HisenseConfigEntry",
+    hass: HomeAssistant,
+    entry: HisenseConfigEntry,
 ) -> None:
     """Create (or refresh) the pairing-lost repair issue for an entry."""
     ir.async_create_issue(
@@ -44,7 +44,7 @@ def async_create_pairing_lost_issue(
 
 
 def async_delete_pairing_lost_issue(
-    hass: "HomeAssistant",
+    hass: HomeAssistant,
     entry_id: str,
 ) -> None:
     """Delete the pairing-lost repair issue (called after successful re-pair)."""
@@ -56,14 +56,12 @@ class PairingLostRepairFlow(RepairsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, str] | None = None
-    ) -> "FlowResult":
+    ) -> FlowResult:
         """Show the confirm step; on confirm, dismiss the issue and reauth."""
         if user_input is not None:
             entry_id = (self.data or {}).get("entry_id")
             entry = (
-                self.hass.config_entries.async_get_entry(entry_id)
-                if entry_id
-                else None
+                self.hass.config_entries.async_get_entry(entry_id) if entry_id else None
             )
             if entry is not None:
                 # Start the PIN re-pairing flow. It runs in the config entries
@@ -91,7 +89,7 @@ class PairingLostRepairFlow(RepairsFlow):
 
 
 async def async_create_fix_flow(
-    hass: "HomeAssistant",
+    hass: HomeAssistant,
     issue_id: str,
     issue_data: dict[str, str | int | float | None] | None,
 ) -> PairingLostRepairFlow | None:

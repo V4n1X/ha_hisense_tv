@@ -18,9 +18,9 @@ Usage:
 
 from __future__ import annotations
 
+from pathlib import Path
 import subprocess
 import sys
-from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,7 +54,9 @@ def check_files() -> list[str]:
         raw = path.read_bytes()
 
         if REPLACEMENT_BYTES in raw:
-            findings.append(f"{rel}: stored Unicode replacement character (U+FFFD bytes)")
+            findings.append(
+                f"{rel}: stored Unicode replacement character (U+FFFD bytes)"
+            )
         if raw.startswith(BOM):
             findings.append(f"{rel}: UTF-8 byte-order mark (BOM)")
         if _is_binary(raw):
@@ -66,7 +68,9 @@ def check_files() -> list[str]:
             continue
 
         for lineno, line in enumerate(text.splitlines(), 1):
-            bad = [ch for ch in line if (ord(ch) < 32 and ch not in "\t") or ord(ch) == 0x7F]
+            bad = [
+                ch for ch in line if (ord(ch) < 32 and ch != "\t") or ord(ch) == 0x7F
+            ]
             if bad:
                 shown = ", ".join(f"U+{ord(ch):04X}" for ch in bad[:3])
                 findings.append(f"{rel}:{lineno}: control character(s) {shown}")
@@ -74,10 +78,13 @@ def check_files() -> list[str]:
 
 
 def main() -> int:
+    """Print findings to stderr and exit non-zero when any were detected."""
     findings = check_files()
     if not findings:
         if "--quiet" not in sys.argv:
-            print("encoding check: OK (no control characters, U+FFFD, BOMs or invalid UTF-8)")
+            print(
+                "encoding check: OK (no control characters, U+FFFD, BOMs or invalid UTF-8)"
+            )
         return 0
     print("encoding check: FAILED\n", file=sys.stderr)
     for finding in findings:

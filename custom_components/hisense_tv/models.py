@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
+import json
 from typing import Any
 
 from .const import VOLUME_TYPE_LEVEL, VOLUME_TYPE_MUTE
@@ -32,10 +32,13 @@ class SourceInfo:
 
     @property
     def label(self) -> str:
+        """Frontend label: display name, then source name, then raw id."""
         return self.displayname or self.sourcename or self.sourceid
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SourceInfo:
+        """Build from one raw sourcelist JSON object."""
+
         def _str(key: str) -> str:
             value = data.get(key)
             return "" if value is None else str(value)
@@ -51,6 +54,7 @@ class SourceInfo:
 
     @classmethod
     def parse_list(cls, payload: str | bytes | None) -> list[SourceInfo]:
+        """Parse a ui_service/sourcelist payload."""
         data = _loads(payload)
         if not isinstance(data, list):
             return []
@@ -74,6 +78,7 @@ class AppInfo:
 
     @classmethod
     def parse(cls, data: Any) -> AppInfo | None:
+        """Parse one app entry (dict or plain string); None when unusable."""
         if isinstance(data, str):
             name = data.strip()
             return cls(name=name, url=name.lower().replace(" ", "")) if name else None
@@ -100,6 +105,7 @@ class AppInfo:
 
     @classmethod
     def parse_list(cls, payload: str | bytes | None) -> list[AppInfo]:
+        """Parse a ui_service/applist payload, deduplicated by name."""
         data = _loads(payload)
         if isinstance(data, dict):
             # Some firmwares wrap the list: {"applist": [...]} / {"data": [...]}
@@ -129,6 +135,7 @@ class VolumeUpdate:
 
     @classmethod
     def parse(cls, payload: str | bytes | None) -> VolumeUpdate:
+        """Parse one platform_service volume feedback message."""
         data = _loads(payload)
         update = cls()
         if not isinstance(data, dict):
@@ -158,6 +165,7 @@ class StateUpdate:
 
     @classmethod
     def parse(cls, payload: str | bytes | None) -> StateUpdate:
+        """Parse one ui_service/state message; extras keep all other keys."""
         data = _loads(payload)
         if not isinstance(data, dict):
             return cls()
@@ -175,10 +183,12 @@ class AuthenResult:
 
     @property
     def ok(self) -> bool:
+        """Whether the TV accepted the pairing code."""
         return self.result == 1
 
     @classmethod
     def parse(cls, payload: str | bytes | None) -> AuthenResult:
+        """Parse an authenticationcode result message."""
         data = _loads(payload)
         if not isinstance(data, dict):
             return cls()
@@ -204,6 +214,7 @@ class CapabilityInfo:
 
     @classmethod
     def parse(cls, payload: str | bytes | None) -> CapabilityInfo:
+        """Parse a capability message (brand, chip platform, capture flags)."""
         data = _loads(payload)
         info = cls()
         if not isinstance(data, dict):
@@ -215,7 +226,9 @@ class CapabilityInfo:
         info.fake_sleep = _to_int(data.get("fake_sleep"), 0)
         info.fake_sleep_state = _to_int(data.get("fake_sleep_state"), 1)
         info.audio_capture_supported = _to_int(data.get("audio_capture_supported")) == 1
-        info.screen_capture_supported = _to_int(data.get("screen_capture_supported")) == 1
+        info.screen_capture_supported = (
+            _to_int(data.get("screen_capture_supported")) == 1
+        )
         return info
 
 
@@ -243,6 +256,7 @@ class TvState:
     app_version: str | None = None
 
     def apply_volume(self, update: VolumeUpdate) -> bool:
+        """Apply a volume update; True when any stored value changed."""
         changed = False
         if update.level is not None and update.level != self.volume_level:
             self.volume_level = update.level
@@ -253,6 +267,7 @@ class TvState:
         return changed
 
     def apply_state(self, update: StateUpdate) -> bool:
+        """Apply a state update (also drives screen_on via fake_sleep states)."""
         changed = False
         if update.statetype:
             if update.statetype != self.tv_state:
@@ -281,16 +296,19 @@ class TvState:
         return changed
 
     def apply_sources(self, sources: list[SourceInfo]) -> bool:
+        """Replace the source list (the TV pushes the complete list)."""
         self.source_list = sources
         return True
 
     def apply_apps(self, apps: list[AppInfo]) -> bool:
+        """Replace the app list; False (no change) when identical."""
         if apps == self.app_list:
             return False
         self.app_list = apps
         return True
 
     def current_source(self) -> SourceInfo | None:
+        """Source object matching the active sourceid, if known."""
         for source in self.source_list:
             if self.source_id and source.sourceid == self.source_id:
                 return source

@@ -11,7 +11,7 @@ from homeassistant.components.media_player import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
 )
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 
 from .const import KEY_COMMANDS, MEDIA_PLAYER_KEYS
 from .data import NotConnected
@@ -40,9 +40,9 @@ SUPPORTED_FEATURES = (
 
 
 async def async_setup_entry(
-    hass,
-    entry: "HisenseConfigEntry",
-    async_add_entities: "AddConfigEntryEntitiesCallback",
+    hass: HomeAssistant,
+    entry: HisenseConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the Hisense TV media player from a config entry."""
     async_add_entities([HisenseTvMediaPlayer(entry)])
@@ -56,22 +56,24 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
 
     _SOURCE_RETRY_SECONDS = 60.0
 
-    def __init__(self, entry: "HisenseConfigEntry") -> None:
+    def __init__(self, entry: HisenseConfigEntry) -> None:
+        """Initialize the media player and its source-retry throttle."""
         super().__init__(entry, "media-player")
         self._source_requested_at: float | None = None
 
     @property
     def should_poll(self) -> bool:
+        """Push-only: coordinator listeners wake the entity."""
         return False
 
     @property
     def available(self) -> bool:
-        # Keep media_player available so the user can turn on the TV via Wake-on-LAN
-        # when the TV is off/disconnected.
+        """Keep available so WOL can power the TV on while disconnected."""
         return True
 
     @property
     def state(self) -> MediaPlayerState:
+        """Map connection/screen/tv_state onto HA media player states."""
         if not self._client.connected:
             return MediaPlayerState.OFF
         if self._tv_state.screen_on is False:
@@ -85,35 +87,42 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
 
     @property
     def volume_level(self) -> float | None:
+        """Volume as 0.0-1.0 (protocol reports 0-100)."""
         if self._tv_state.volume_level is None:
             return None
         return round(self._tv_state.volume_level / 100.0, 2)
 
     @property
     def is_volume_muted(self) -> bool | None:
+        """Whether the TV reports muted audio."""
         return self._tv_state.muted
 
     @property
     def source(self) -> str | None:
+        """Human label of the active source or app."""
         current = self._tv_state.current_source()
         return current.label if current else self._tv_state.source_name
 
     @property
     def source_list(self) -> list[str]:
+        """Selectable labels: inputs plus installed apps."""
         names = [source.label for source in self._tv_state.source_list]
         names.extend(app.name for app in self._tv_state.app_list)
         return names
 
     async def _send(self, key: str) -> None:
+        """Send one remote key."""
         await self._client.send_key(key)
 
     async def async_turn_on(self) -> None:
+        """Wake via WOL when enabled, then send the power key."""
         if self._wol_enabled():
             await self.async_wake_tv()
         if self._client.connected:
             await self._send(KEY_COMMANDS["power"])
 
     async def async_turn_off(self) -> None:
+        """Send the power key (a toggle; state feedback confirms)."""
         # KEY_POWER is a toggle; the TV confirms via state feedback.
         try:
             await self._send(KEY_COMMANDS["power"])
@@ -121,7 +130,9 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
             raise tv_not_connected_error(err) from err
 
     async def async_set_volume_level(self, volume: float) -> None:
-        level = int(round(max(0.0, min(1.0, volume)) * 100))
+        """Set absolute volume and echo it locally (dedupe handled in TvState)."""
+        # round(x) without ndigits already returns an int.
+        level = round(max(0.0, min(1.0, volume)) * 100)
         try:
             await self._client.set_volume(level)
         except NotConnected as err:
@@ -131,52 +142,63 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
         self.async_write_ha_state()
 
     async def async_volume_up(self) -> None:
+        """Send the volume-up key."""
         await self._send(KEY_COMMANDS["volume_up"])
 
     async def async_volume_down(self) -> None:
+        """Send the volume-down key."""
         await self._send(KEY_COMMANDS["volume_down"])
 
     async def async_mute_volume(self, mute: bool) -> None:
+        """Send the mute toggle key (the protocol has no absolute mute state)."""
         await self._send(KEY_COMMANDS["mute"])
 
     async def async_media_play(self) -> None:
+        """Send the play key."""
         try:
             await self._send(MEDIA_PLAYER_KEYS["play"])
         except NotConnected as err:
             raise tv_not_connected_error(err) from err
 
     async def async_media_pause(self) -> None:
+        """Send the pause key."""
         try:
             await self._send(MEDIA_PLAYER_KEYS["pause"])
         except NotConnected as err:
             raise tv_not_connected_error(err) from err
 
     async def async_media_stop(self) -> None:
+        """Send the stop key."""
         try:
             await self._send(MEDIA_PLAYER_KEYS["stop"])
         except NotConnected as err:
             raise tv_not_connected_error(err) from err
 
     async def async_media_next_track(self) -> None:
+        """Send the next-track key."""
         try:
             await self._send(MEDIA_PLAYER_KEYS["next_track"])
         except NotConnected as err:
             raise tv_not_connected_error(err) from err
 
     async def async_media_previous_track(self) -> None:
+        """Send the previous-track key."""
         try:
             await self._send(MEDIA_PLAYER_KEYS["previous_track"])
         except NotConnected as err:
             raise tv_not_connected_error(err) from err
 
     async def async_select_source(self, source: str) -> None:
+        """Switch to a source label or launch an app by name."""
         for item in self._tv_state.source_list:
             if item.label == source:
                 await self._client.select_source(item.sourceid)
                 return
         for app in self._tv_state.app_list:
             if app.name == source:
-                await self._client.launch_app(app.url, app.name, app.url_type, app.store_type)
+                await self._client.launch_app(
+                    app.url, app.name, app.url_type, app.store_type
+                )
                 return
         _LOGGER.warning("Unknown source %s", source)
 

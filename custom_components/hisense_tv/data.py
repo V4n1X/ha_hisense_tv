@@ -11,18 +11,19 @@ Reproduces MqttConnectManager/MqttCmdManager of the RemoteNOW app:
 from __future__ import annotations
 
 import asyncio
+from collections import deque
+from collections.abc import Callable
 import contextlib
 import json
 import logging
-import ssl
-import uuid
-from collections import deque
 from pathlib import Path
-from typing import Any, Callable
+import ssl
+from typing import Any
+import uuid
 
 from .const import (
-    ACTION_APP_VERSION,
     ACTION_APP_LIST,
+    ACTION_APP_VERSION,
     ACTION_AUTHENTICATION_CODE,
     ACTION_AUTHENTICATION_CODE_CLOSE,
     ACTION_CAPABILITY,
@@ -36,17 +37,19 @@ from .const import (
     ACTION_SOURCE_LIST,
     CLIENT_CERT_FILE,
     CONNECT_TIMEOUT,
+    DISPATCH_APP_VERSION,
     DISPATCH_APPS,
     DISPATCH_AUTH_RESULT,
     DISPATCH_AUTH_TOAST,
     DISPATCH_CAPABILITY,
     DISPATCH_CONNECTION,
-    DISPATCH_APP_VERSION,
     DISPATCH_PAIRING_REQUIRED,
     DISPATCH_SOURCES,
     DISPATCH_STATE,
     DISPATCH_VOLUME,
     KEEPALIVE,
+    MQTT_PASSWORD,
+    MQTT_USERNAME,
     RECONNECT_MAX,
     RECONNECT_MIN,
     SERVICE_PLATFORM,
@@ -64,8 +67,6 @@ from .const import (
     TOPIC_FUNC_SOURCE_LIST,
     TOPIC_FUNC_STATE,
     TOPIC_FUNC_VOLUMES,
-    MQTT_PASSWORD,
-    MQTT_USERNAME,
     subscribe_own,
     tv_action,
 )
@@ -120,6 +121,7 @@ class HisenseTvClient:
         client_cert_path: str | Path | None = None,
         event_callback: EventCallback | None = None,
     ) -> None:
+        """Set up connection parameters and empty runtime state."""
         self.host = host
         self.port = port
         self.client_id = client_id
@@ -159,6 +161,7 @@ class HisenseTvClient:
         self._task = asyncio.create_task(self._run_forever())
 
     async def stop(self) -> None:
+        """Cancel the reconnect task and close the connection."""
         self._stopping = True
         if self._task is not None:
             self._task.cancel()
@@ -190,7 +193,9 @@ class HisenseTvClient:
                 )
                 _LOGGER.debug("Using bundled client certificate: %s", cert_path)
             except ssl.SSLError as err:
-                _LOGGER.warning("Could not load client certificate %s: %s", cert_path, err)
+                _LOGGER.warning(
+                    "Could not load client certificate %s: %s", cert_path, err
+                )
         return ctx
 
     async def _connect_once(self) -> None:
@@ -225,7 +230,7 @@ class HisenseTvClient:
                     keepalive=KEEPALIVE,
                 )
                 await self._open_client(client, CONNECT_TIMEOUT)
-            except asyncio.TimeoutError as err:
+            except TimeoutError as err:
                 last_error = err
                 continue
             except OSError as err:
@@ -288,8 +293,10 @@ class HisenseTvClient:
                 async for message in self._client.messages:
                     try:
                         self._handle_message(str(message.topic), message.payload)
-                    except Exception:  # noqa: BLE001 - one bad payload must not kill us
-                        _LOGGER.exception("Failed to handle message on %s", message.topic)
+                    except Exception:
+                        _LOGGER.exception(
+                            "Failed to handle message on %s", message.topic
+                        )
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # noqa: BLE001 - reconnect on any transport error
@@ -320,7 +327,7 @@ class HisenseTvClient:
         if self.on_event is not None:
             try:
                 self.on_event(name, data)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception("Event callback failed for %s", name)
 
     def _handle_message(self, topic: str, payload: bytes | bytearray | str) -> None:
@@ -332,7 +339,11 @@ class HisenseTvClient:
         if ident not in (TOPIC_CLIENT_BROADCAST, self.client_id):
             return
         function = parts[-1].lstrip("/")
-        text = payload.decode("utf-8", errors="replace") if isinstance(payload, (bytes, bytearray)) else str(payload)
+        text = (
+            payload.decode("utf-8", errors="replace")
+            if isinstance(payload, (bytes, bytearray))
+            else str(payload)
+        )
         _LOGGER.debug("%s <- %s = %s", self.client_id, topic, text[:200])
 
         if function == TOPIC_FUNC_STATE:
@@ -375,50 +386,68 @@ class HisenseTvClient:
     # -- commands ----------------------------------------------------------
 
     async def send_key(self, key: str) -> bool:
+        """Publish a remote key press."""
         return await self._publish(SERVICE_REMOTE, ACTION_SEND_KEY, key)
 
     async def send_text(self, text: str) -> bool:
+        """Publish a text input action."""
         return await self._publish(SERVICE_REMOTE, ACTION_INPUT, text)
 
     async def set_volume(self, level: int) -> bool:
+        """Publish a volume level (0-100)."""
         level = max(0, min(100, int(level)))
         # Firmware expects a plain number string (RemoteVolumeView: "" + volume).
         return await self._publish(SERVICE_PLATFORM, ACTION_CHANGE_VOLUME, str(level))
 
     async def get_volume(self) -> bool:
+        """Ask the TV to push current volume feedback."""
         return await self._publish(SERVICE_PLATFORM, ACTION_GET_VOLUME, "")
 
     async def get_tv_state(self) -> bool:
+        """Ask the TV to push its current state."""
         return await self._publish(SERVICE_UI, ACTION_GET_TV_STATE, "")
 
     async def request_app_list(self) -> bool:
+        """Ask the TV to push its installed app list."""
         return await self._publish(SERVICE_UI, ACTION_APP_LIST, "")
 
     async def request_source_list(self) -> bool:
+        """Ask the TV to push its source list."""
         return await self._publish(SERVICE_UI, ACTION_SOURCE_LIST, "")
 
     async def select_source(self, source_id: str) -> bool:
+        """Switch to a source by its sourceid."""
         payload = json.dumps({"sourceid": source_id})
         return await self._publish(SERVICE_UI, ACTION_CHANGE_SOURCE, payload)
 
-    async def launch_app(self, url: str, name: str, url_type: int = 37, store_type: int = 0) -> bool:
-        payload = json.dumps({"name": name, "urlType": url_type, "storeType": store_type, "url": url})
+    async def launch_app(
+        self, url: str, name: str, url_type: int = 37, store_type: int = 0
+    ) -> bool:
+        """Launch an app by URL (RemoteNOW launchapp payload)."""
+        payload = json.dumps(
+            {"name": name, "urlType": url_type, "storeType": store_type, "url": url}
+        )
         return await self._publish(SERVICE_UI, ACTION_LAUNCH_APP, payload)
 
     async def request_capability(self) -> bool:
+        """Ask the TV to push its capability info."""
         return await self._publish(SERVICE_UI, ACTION_CAPABILITY, "")
 
     async def request_app_version(self) -> bool:
+        """Ask the TV to push its firmware/app version."""
         return await self._publish(SERVICE_UI, ACTION_APP_VERSION, "")
 
     async def submit_pairing_code(self, code: str) -> bool:
+        """Submit the PIN shown on the TV screen."""
         payload = json.dumps({"authNum": code})
         return await self._publish(SERVICE_UI, ACTION_AUTHENTICATION_CODE, payload)
 
     async def cancel_pairing(self) -> bool:
+        """Close the TV's pairing dialog."""
         return await self._publish(SERVICE_UI, ACTION_AUTHENTICATION_CODE_CLOSE, "")
 
     async def wake_on_lan(self, mac: str) -> None:
+        """Send a WOL magic packet to the given MAC."""
         await async_send_wol(mac)
 
 
@@ -444,5 +473,5 @@ async def wait_for_event(
             return best[1], best[2]
         remaining = deadline - asyncio.get_running_loop().time()
         if remaining <= 0:
-            raise asyncio.TimeoutError(f"No {sorted(names)} within {timeout}s")
+            raise TimeoutError(f"No {sorted(names)} within {timeout}s")
         await asyncio.sleep(0.05)

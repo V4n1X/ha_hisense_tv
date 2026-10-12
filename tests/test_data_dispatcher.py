@@ -7,6 +7,7 @@ CID = "ha-hisense-test1234"
 
 
 def make_client() -> tuple[HisenseTvClient, list]:
+    """Build a client whose events are collected into a list."""
     events: list[tuple[str, object]] = []
     client = HisenseTvClient("127.0.0.1", 36669, CID)
     client.on_event = lambda name, data: events.append((name, data))
@@ -14,6 +15,7 @@ def make_client() -> tuple[HisenseTvClient, list]:
 
 
 def test_state_dispatch_from_broadcast():
+    """ui_service/state broadcasts dispatch a parsed StateUpdate."""
     client, events = make_client()
     client._handle_message(
         "/remoteapp/mobile/broadcast/ui_service/state",
@@ -27,6 +29,7 @@ def test_state_dispatch_from_broadcast():
 
 
 def test_volume_alias_dispatch_for_own_client():
+    """Both firmware spellings (volume/volumechange) dispatch volume updates."""
     # Firmware variants use either /volume or /volumechange.
     client, events = make_client()
     client._handle_message(
@@ -44,8 +47,11 @@ def test_volume_alias_dispatch_for_own_client():
 
 
 def test_pairing_and_auth_result_flow():
+    """/authentication requests pairing, /authenticationcode carries the result."""
     client, events = make_client()
-    client._handle_message("/remoteapp/mobile/broadcast/ui_service/authentication", b"{}")
+    client._handle_message(
+        "/remoteapp/mobile/broadcast/ui_service/authentication", b"{}"
+    )
     client._handle_message(
         f"/remoteapp/mobile/{CID}/ui_service/authenticationcode",
         b'{"result":1,"info":"ok"}',
@@ -73,6 +79,7 @@ def test_auth_toast_is_not_a_success_signal():
 
 
 def test_foreign_client_ids_are_ignored():
+    """Messages addressed to other clients produce no events."""
     client, events = make_client()
     client._handle_message(
         "/remoteapp/mobile/someoneelse/ui_service/state",
@@ -82,13 +89,17 @@ def test_foreign_client_ids_are_ignored():
 
 
 def test_irrelevant_topics_are_ignored():
+    """Non-feedback topics and garbage produce no events."""
     client, events = make_client()
-    client._handle_message("/remoteapp/tv/remote_service/x/actions/sendkey", b"KEY_POWER")
+    client._handle_message(
+        "/remoteapp/tv/remote_service/x/actions/sendkey", b"KEY_POWER"
+    )
     client._handle_message("garbage", b"x")
     assert events == []
 
 
 def test_pop_event_returns_newest_match():
+    """pop_event honours the after_index marker when polling."""
     client, _events = make_client()
     client._handle_message(
         "/remoteapp/mobile/broadcast/ui_service/state", b'{"statetype":"app"}'
@@ -123,8 +134,8 @@ def test_config_flow_wait_event_names_match_dispatcher():
         PROBE_WAIT_EVENTS,
     )
 
-    assert PROBE_WAIT_EVENTS == frozenset({DISPATCH_PAIRING_REQUIRED})
-    assert AUTH_WAIT_EVENTS == frozenset({DISPATCH_AUTH_RESULT})
+    assert frozenset({DISPATCH_PAIRING_REQUIRED}) == PROBE_WAIT_EVENTS
+    assert frozenset({DISPATCH_AUTH_RESULT}) == AUTH_WAIT_EVENTS
     assert DISPATCH_AUTH_RESULT != "authenticationcode"
 
 

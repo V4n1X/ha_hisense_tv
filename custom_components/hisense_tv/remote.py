@@ -7,19 +7,25 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.remote import RemoteEntity
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 
 from .const import CONF_COMMAND_DELAY, DEFAULT_COMMAND_DELAY, resolve_key
 from .data import NotConnected
 from .entity import HisenseTvEntity, tv_not_connected_error
 
 if TYPE_CHECKING:
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
     from .__init__ import HisenseConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass, entry: "HisenseConfigEntry", async_add_entities) -> None:  # noqa: ANN001
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: HisenseConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
     """Set up the Hisense TV remote from a config entry."""
     async_add_entities([HisenseTvRemote(entry)])
 
@@ -29,22 +35,27 @@ class HisenseTvRemote(HisenseTvEntity, RemoteEntity):
 
     _attr_translation_key = "remote"
 
-    def __init__(self, entry: "HisenseConfigEntry") -> None:
+    def __init__(self, entry: HisenseConfigEntry) -> None:
+        """Create the remote entity for one TV entry."""
         super().__init__(entry, "remote")
 
     @property
     def should_poll(self) -> bool:
+        """Push-only: coordinator listeners wake the entity."""
         return False
 
     @property
     def available(self) -> bool:
+        """Keep available so WOL can power the TV on while disconnected."""
         return True
 
     @property
     def is_on(self) -> bool | None:
+        """The remote is "on" when the MQTT connection is up."""
         return self._client.connected
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        """Wake via WOL when enabled, then send the power key."""
         if self._wol_enabled():
             await self.async_wake_tv()
         if self._client.connected:
@@ -59,9 +70,10 @@ class HisenseTvRemote(HisenseTvEntity, RemoteEntity):
         """
         delay = float(kwargs.get("delay_secs", 0))
         if delay <= 0:
-            delay = int(
-                self._entry.options.get(CONF_COMMAND_DELAY, DEFAULT_COMMAND_DELAY)
-            ) / 1000.0
+            delay = (
+                int(self._entry.options.get(CONF_COMMAND_DELAY, DEFAULT_COMMAND_DELAY))
+                / 1000.0
+            )
 
         expanded: list[str] = []
         for command in commands:

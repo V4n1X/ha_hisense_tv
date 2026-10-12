@@ -18,6 +18,7 @@ STATE_SAMPLE = '{"statetype":"sourceswitch","sourceid":"4","sourcename":"HDMI 2"
 
 
 def test_volume_level_types_0_and_1():
+    """Types 0/1 carry the level; out-of-range values are clamped to 0-100."""
     assert VolumeUpdate.parse('{"volume_type":0,"volume_value":42}').level == 42
     assert VolumeUpdate.parse('{"volume_type":1,"volume_value":7}').level == 7
     update = VolumeUpdate.parse('{"volume_type":0,"volume_value":250}')
@@ -25,6 +26,7 @@ def test_volume_level_types_0_and_1():
 
 
 def test_volume_mute_type_2():
+    """Type 2 carries the mute flag, never a level."""
     muted = VolumeUpdate.parse('{"volume_type":2,"volume_value":1}')
     unmuted = VolumeUpdate.parse('{"volume_type":2,"volume_value":0}')
     assert muted.muted is True and muted.level is None
@@ -32,12 +34,14 @@ def test_volume_mute_type_2():
 
 
 def test_volume_garbage_payload_is_noop():
+    """Empty or non-JSON payloads produce an empty (no-change) update."""
     update = VolumeUpdate.parse("")
     assert update.level is None and update.muted is None
     assert VolumeUpdate.parse("not json").level is None
 
 
 def test_sourcelist_parsing_matches_krazy998_sample():
+    """The community-captured sourcelist sample parses field by field."""
     sources = SourceInfo.parse_list(SOURCELIST_SAMPLE)
     assert len(sources) == 2
     hdmi2 = sources[0]
@@ -48,6 +52,7 @@ def test_sourcelist_parsing_matches_krazy998_sample():
 
 
 def test_state_feedback_with_source_extras():
+    """Sourceswitch state messages carry sourceid/sourcename as extras."""
     state = StateUpdate.parse(STATE_SAMPLE)
     assert state.statetype == "sourceswitch"
     assert state.extras["sourceid"] == "4"
@@ -55,12 +60,14 @@ def test_state_feedback_with_source_extras():
 
 
 def test_authen_result_ok_and_fail():
+    """result=1 means accepted, anything else rejected with an info string."""
     assert AuthenResult.parse('{"result":1,"info":""}').ok is True
     failed = AuthenResult.parse('{"result":0,"info":"wrong"}')
     assert failed.ok is False and failed.info == "wrong"
 
 
 def test_capability_parsing():
+    """Capability fields map from the camelCase wire names."""
     cap = CapabilityInfo.parse(
         '{"brand":"hisense","deviceid":"dev123","featurecode":"FC","chipplatform":"mtk",'
         '"fake_sleep":1,"fake_sleep_state":0,"audio_capture_supported":1,"screen_capture_supported":0}'
@@ -72,6 +79,7 @@ def test_capability_parsing():
 
 
 def test_tv_state_transitions():
+    """Applying updates mutates TvState and reports change-vs-dedupe."""
     state = TvState()
     assert state.apply_volume(VolumeUpdate(level=30)) is True
     assert state.volume_level == 30
