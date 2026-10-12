@@ -9,8 +9,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from time import monotonic as time_monotonic
-
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -42,6 +41,9 @@ from .data import HisenseTvClient, default_client_cert_path
 from .entity import device_connections, entry_unique_id
 from .models import CapabilityInfo, StateUpdate, TvState
 
+if TYPE_CHECKING:
+    from .discovery import DiscoveredTV
+
 _LOGGER = logging.getLogger(__name__)
 
 # Note: repairs is NOT an entity platform. HA calls the module-level
@@ -53,12 +55,7 @@ PLATFORMS: list[Platform] = [
     Platform.BUTTON,
 ]
 
-if TYPE_CHECKING:
-    from typing import TypeAlias
-
-    HisenseConfigEntry: TypeAlias = ConfigEntry[RuntimeData]
-else:
-    HisenseConfigEntry = ConfigEntry
+type HisenseConfigEntry = ConfigEntry[RuntimeData]
 
 
 def bundled_client_cert() -> Path | None:
@@ -104,7 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
         except Exception as ex:  # noqa: BLE001 - must never break the connection loop
             _LOGGER.debug("%s: metadata request failed: %s", entry.title, ex)
 
-    def _on_event(name: str, payload) -> None:  # noqa: ANN001 - Any payload
+    def _on_event(name: str, payload: Any) -> None:
         """Apply push feedback to the shared TvState and refresh listeners."""
         nonlocal _last_reauth_request, _last_metadata_request
         runtime: RuntimeData | None = getattr(entry, "runtime_data", None)
@@ -114,7 +111,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
 
         if name == DISPATCH_STATE and isinstance(payload, StateUpdate):
             changed = runtime.state.apply_state(payload)
-            _LOGGER.debug("%s: state update applied=%s (%s)", entry.title, changed, payload.statetype)
+            _LOGGER.debug(
+                "%s: state update applied=%s (%s)",
+                entry.title,
+                changed,
+                payload.statetype,
+            )
         elif name == DISPATCH_VOLUME:
             changed = runtime.state.apply_volume(payload)
             _LOGGER.debug(
@@ -127,10 +129,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
         elif name == DISPATCH_SOURCES:
             runtime.state.apply_sources(payload)
             changed = True
-            _LOGGER.debug("%s: source list updated (%d entries)", entry.title, len(payload))
+            _LOGGER.debug(
+                "%s: source list updated (%d entries)", entry.title, len(payload)
+            )
         elif name == DISPATCH_APPS and isinstance(payload, list):
             changed = runtime.state.apply_apps(payload)
-            _LOGGER.debug("%s: app list updated (%d entries)", entry.title, len(payload))
+            _LOGGER.debug(
+                "%s: app list updated (%d entries)", entry.title, len(payload)
+            )
         elif name == DISPATCH_CONNECTION:
             runtime.state.connected = bool(payload)
             if payload:
@@ -151,9 +157,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
             changed = True
             # Persist the chip platform so hw_version survives HA restarts
             # (and fresh registry devices) even when the TV is off.
-            if payload.chip_platform and entry.data.get(CONF_CHIP_PLATFORM) != payload.chip_platform:
+            if (
+                payload.chip_platform
+                and entry.data.get(CONF_CHIP_PLATFORM) != payload.chip_platform
+            ):
                 hass.config_entries.async_update_entry(
-                    entry, data={**entry.data, CONF_CHIP_PLATFORM: payload.chip_platform}
+                    entry,
+                    data={**entry.data, CONF_CHIP_PLATFORM: payload.chip_platform},
                 )
             _refresh_device_metadata(hass, entry)
         elif name == DISPATCH_APP_VERSION and payload:
@@ -165,7 +175,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
             now = time_monotonic()
             if now - _last_reauth_request > 60:
                 _last_reauth_request = now
-                _LOGGER.info("%s: TV requests pairing - starting reauth flow", entry.title)
+                _LOGGER.info(
+                    "%s: TV requests pairing - starting reauth flow", entry.title
+                )
                 from .repairs import async_create_pairing_lost_issue  # noqa: PLC0415
 
                 async_create_pairing_lost_issue(hass, entry)
@@ -208,43 +220,54 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
     # If network/hardware metadata is missing (e.g. added via manual IP),
     # query SSDP in the background to discover MAC addresses and model info.
     if not entry.data.get(CONF_MAC_WIFI) and not entry.data.get(CONF_MAC_ETHERNET):
-        async def _async_background_metadata_enrichment() -> None:
-            from .discovery import async_discover_tvs  # noqa: PLC0415
-            try:
-                discovered = await async_discover_tvs(timeout=6.0)
-                host = entry.data.get("host")
-                tv = next((item for item in discovered if item.host == host), None)
-                if tv:
-                    new_data = dict(entry.data)
-                    if tv.mac_wifi and not new_data.get(CONF_MAC_WIFI):
-                        new_data[CONF_MAC_WIFI] = tv.mac_wifi
-                    if tv.mac_ethernet and not new_data.get(CONF_MAC_ETHERNET):
-                        new_data[CONF_MAC_ETHERNET] = tv.mac_ethernet
-                    if tv.model_name and not new_data.get(CONF_MODEL_NAME):
-                        new_data[CONF_MODEL_NAME] = tv.model_name
-                    if tv.tv_version and not new_data.get(CONF_TV_VERSION):
-                        new_data[CONF_TV_VERSION] = tv.tv_version
-                    if tv.transport_protocol and not new_data.get(CONF_TRANSPORT_PROTOCOL):
-                        new_data[CONF_TRANSPORT_PROTOCOL] = tv.transport_protocol
-                    platform = (tv.extras or {}).get("platform")
-                    if platform and not new_data.get(CONF_PLATFORM_VERSION):
-                        new_data[CONF_PLATFORM_VERSION] = str(platform)
-                    if new_data != entry.data:
-                        hass.config_entries.async_update_entry(entry, data=new_data)
-                        _register_device(hass, entry)
-                        _refresh_device_metadata(hass, entry)
-            except Exception as ex:  # noqa: BLE001
-                _LOGGER.debug("%s: background metadata enrichment: %s", entry.title, ex)
-
-        # async_create_background_task keeps the task reference on the entry
-        # (HA >= 2024.3) so it cannot be garbage-collected mid-flight.
         entry.async_create_background_task(
             hass,
-            _async_background_metadata_enrichment(),
+            _async_background_metadata_enrichment(hass, entry),
             "hisense_tv_metadata_enrichment",
         )
 
     return True
+
+
+def _fill_missing(new_data: dict, discovered: DiscoveredTV, key: str) -> None:
+    """Copy discovered.<key> into new_data[key] when new_data has no value."""
+    value = getattr(discovered, key, None)
+    if value and not new_data.get(key):
+        new_data[key] = value
+
+
+async def _async_background_metadata_enrichment(
+    hass: HomeAssistant,
+    entry: HisenseConfigEntry,
+) -> None:
+    """Enrich entry data via SSDP (MACs, model, versions) once, in the background.
+
+    Runs only when the entry has no MAC (usually added via manual IP). Best
+    effort: any failure is logged at debug level and otherwise ignored.
+    """
+    from .discovery import async_discover_tvs  # noqa: PLC0415
+
+    try:
+        discovered = await async_discover_tvs(timeout=6.0)
+        host = entry.data.get("host")
+        tv = next((item for item in discovered if item.host == host), None)
+        if tv is None:
+            return
+        new_data = dict(entry.data)
+        _fill_missing(new_data, tv, CONF_MAC_WIFI)
+        _fill_missing(new_data, tv, CONF_MAC_ETHERNET)
+        _fill_missing(new_data, tv, CONF_MODEL_NAME)
+        _fill_missing(new_data, tv, CONF_TV_VERSION)
+        _fill_missing(new_data, tv, CONF_TRANSPORT_PROTOCOL)
+        platform = (tv.extras or {}).get("platform")
+        if platform and not new_data.get(CONF_PLATFORM_VERSION):
+            new_data[CONF_PLATFORM_VERSION] = str(platform)
+        if new_data != entry.data:
+            hass.config_entries.async_update_entry(entry, data=new_data)
+            _register_device(hass, entry)
+            _refresh_device_metadata(hass, entry)
+    except Exception as ex:  # noqa: BLE001
+        _LOGGER.debug("%s: background metadata enrichment: %s", entry.title, ex)
 
 
 def _refresh_device_metadata(hass: HomeAssistant, entry: HisenseConfigEntry) -> None:
@@ -253,7 +276,12 @@ def _refresh_device_metadata(hass: HomeAssistant, entry: HisenseConfigEntry) -> 
     if runtime is None:
         return
     registry = dr.async_get(hass)
-    device = registry.async_get_device(identifiers={(DOMAIN, entry_unique_id(entry))})
+    # Scoped-by-entry lookup: identifiers are only unique per config entry
+    # since the 2026.9 device registry rework (async_get_device is deprecated
+    # and will be removed in 2027.8).
+    device = registry.async_get_device_by_identifier(
+        (DOMAIN, entry_unique_id(entry)), entry.entry_id
+    )
     if device is None:
         return
     updates: dict[str, str] = {}

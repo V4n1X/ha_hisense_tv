@@ -11,9 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import importlib.util
 import os
+from pathlib import Path
 import sys
 import types
-from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "custom_components"))
@@ -103,13 +103,15 @@ def _install_stubs() -> None:
             super().__init__(**kwargs)
 
     class _DeviceRegistry:
-        def async_get_or_create(self, **kwargs: object) -> object:  # noqa: ANN201, ARG001
+        def async_get_or_create(self, **kwargs: object) -> object:
             return object()
 
-        def async_get_device(self, **kwargs: object) -> None:  # noqa: ANN201, ARG001
+        def async_get_device_by_identifier(
+            self, _identifier: object, _entry_id: object
+        ) -> None:
             return None
 
-        def async_update_device(self, *_args: object, **_kwargs: object) -> None:  # noqa: ARG002
+        def async_update_device(self, *_args: object, **_kwargs: object) -> None:
             return None
 
     dr = _register(
@@ -119,7 +121,7 @@ def _install_stubs() -> None:
     )
     dr.async_get = lambda _hass: _DeviceRegistry()  # type: ignore[attr-defined]
 
-    def _callback(fn):  # noqa: ANN001, ANN202
+    def _callback(fn):
         return fn
 
     _register(
@@ -150,7 +152,7 @@ def _install_stubs() -> None:
         def __class_getitem__(cls, _item: object) -> type:  # Generic[T] support
             return cls
 
-        def async_add_listener(self, *_a: object, **_k: object):  # noqa: ANN202
+        def async_add_listener(self, *_a: object, **_k: object):
             return lambda: None
 
         async def async_request_refresh(self) -> None:
@@ -218,12 +220,13 @@ def _install_stubs() -> None:
         IssueSeverity=_IssueSeverity,
     )
     issue_registry.async_get = lambda hass: getattr(hass, "issue_registry", None)
-    issue_registry.async_create_issue = (
-        lambda hass, domain, issue_id, **kwargs: issue_registry.async_get(hass)
-        .async_create_issue(hass, domain, issue_id, **kwargs)
+    issue_registry.async_create_issue = lambda hass, domain, issue_id, **kwargs: (
+        issue_registry.async_get(hass).async_create_issue(
+            hass, domain, issue_id, **kwargs
+        )
     )
-    issue_registry.async_delete_issue = (
-        lambda hass, domain, issue_id: issue_registry.async_get(hass).async_delete(domain, issue_id)
+    issue_registry.async_delete_issue = lambda hass, domain, issue_id: (
+        issue_registry.async_get(hass).async_delete(domain, issue_id)
     )
 
     class _ConfigFlow:

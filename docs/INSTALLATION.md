@@ -10,7 +10,7 @@ the official RemoteNOW app's first-time connection.
 
 | # | Prerequisite | How to check |
 |---|---|---|
-| 1 | Home Assistant ≥ 2024.3 running | *Settings → About* |
+| 1 | Home Assistant ≥ 2026.9 running | *Settings → About* |
 | 2 | **HACS** is installed | *HACS* appears in the sidebar. If not: [hacs.xyz](https://hacs.xyz/docs/setup/download) |
 | 3 | TV and HA are on the **same network/subnet** | TV menu → network status (note the IP!) |
 | 4 | TV is **powered on** (not eco standby) | Picture visible |

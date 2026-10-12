@@ -24,12 +24,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
-import socket
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+import logging
+import re
+import socket
 from typing import Any
 from urllib.parse import urlparse
+from xml.etree.ElementTree import ParseError
+
+from defusedxml import ElementTree as DefusedElementTree
 
 from .const import DEFAULT_PORT, TLS_TRANSPORT_MIN
 
@@ -135,7 +138,6 @@ def parse_model_description(text: str) -> dict[str, str]:
     result: dict[str, str] = {}
     if not text:
         return result
-    import re
     tokens = re.split(r"[\r\n;,]+", text)
     for token in tokens:
         token = token.strip()
@@ -158,7 +160,8 @@ def is_hisense_remote_tv(manufacturer: str, description: dict[str, str]) -> bool
     if _KEY_MQTT_PORT in description or _KEY_TRANSPORT in description:
         return True
     manu = (manufacturer or "").strip().lower()
-    return (manu.startswith("hisense") or manu.startswith("vidaa") or "hisense" in manu or "vidaa" in manu) and bool(description)
+    # startswith is implied by the substring check; keep one check per brand.
+    return ("hisense" in manu or "vidaa" in manu) and bool(description)
 
 
 def parse_upnp_dict(upnp_dict: dict[str, Any], host: str = "") -> DiscoveredTV | None:
@@ -185,11 +188,13 @@ def parse_upnp_dict(upnp_dict: dict[str, Any], host: str = "") -> DiscoveredTV |
 
     use_tls = transport is not None and transport >= TLS_TRANSPORT_MIN
 
-    tv = DiscoveredTV(
+    return DiscoveredTV(
         host=host,
         name=friendly or (f"Hisense TV ({host})" if host else "Hisense TV"),
         manufacturer=manufacturer,
-        model_name=desc.get("model_name") or values.get("modelfriendlyname", "") or values.get("modelnumber", ""),
+        model_name=desc.get("model_name")
+        or values.get("modelfriendlyname", "")
+        or values.get("modelnumber", ""),
         tv_version=desc.get("tv_version", ""),
         udn=udn,
         region=desc.get("region", ""),
@@ -202,14 +207,15 @@ def parse_upnp_dict(upnp_dict: dict[str, Any], host: str = "") -> DiscoveredTV |
         use_tls=use_tls,
         extras=desc,
     )
-    return tv
 
 
 def parse_device_description(xml_bytes: bytes) -> DiscoveredTV | None:
     """Parse a UPnP device description XML into a DiscoveredTV (if Hisense)."""
     try:
-        root = ET.fromstring(xml_bytes)
-    except ET.ParseError:
+        # defusedxml: the description is untrusted LAN input; HA flags plain
+        # xml.etree as vulnerable to entity-expansion attacks (ruff S314).
+        root = DefusedElementTree.fromstring(xml_bytes)
+    except (ParseError, ValueError):
         return None
 
     device = None
@@ -237,7 +243,9 @@ def parse_device_description(xml_bytes: bytes) -> DiscoveredTV | None:
         host="",
         name=friendly,
         manufacturer=manufacturer,
-        model_name=desc.get("model_name") or values.get("modelfriendlyname", "") or values.get("modelnumber", ""),
+        model_name=desc.get("model_name")
+        or values.get("modelfriendlyname", "")
+        or values.get("modelnumber", ""),
         tv_version=desc.get("tv_version", ""),
         udn=udn,
         region=desc.get("region", ""),
@@ -257,10 +265,14 @@ def parse_device_description(xml_bytes: bytes) -> DiscoveredTV | None:
         tv.transport_protocol = int(transport_raw)
     except ValueError:
         tv.transport_protocol = None
-    tv.use_tls = tv.transport_protocol is not None and tv.transport_protocol >= TLS_TRANSPORT_MIN
+    tv.use_tls = (
+        tv.transport_protocol is not None and tv.transport_protocol >= TLS_TRANSPORT_MIN
+    )
 
     tv.mac_wifi = format_mac(desc.get("macwifi", "")) if desc.get("macwifi") else ""
-    tv.mac_ethernet = format_mac(desc.get("macethernet", "")) if desc.get("macethernet") else ""
+    tv.mac_ethernet = (
+        format_mac(desc.get("macethernet", "")) if desc.get("macethernet") else ""
+    )
 
     # The app prefers the ethernet MAC as device identity when present.
     tv.extras.update(
@@ -278,9 +290,11 @@ async def fetch_description(location: str, timeout: float = 5.0) -> DiscoveredTV
     import aiohttp  # noqa: PLC0415 - keep module importable without HA deps
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(location, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
-                data = await resp.read()
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(location, timeout=aiohttp.ClientTimeout(total=timeout)) as resp,
+        ):
+            data = await resp.read()
     except Exception:  # noqa: BLE001 - unreachable TV during scan is normal
         return None
     tv = parse_device_description(data)
@@ -297,7 +311,7 @@ class _SsdpProtocol(asyncio.DatagramProtocol):
         self._results = results
         self._done = done
 
-    def datagram_received(self, data: bytes, _addr) -> None:  # type: ignore[no-untyped-def]
+    def datagram_received(self, data: bytes, _addr: tuple[str, int]) -> None:
         headers = parse_ssdp_response(data)
         location = headers.get("location")
         if location:
@@ -315,21 +329,20 @@ async def async_scan(timeout: float = 4.0) -> list[str]:
 
     # One datagram per search target: devices commonly ignore two M-SEARCH
     # requests concatenated into a single packet.
-    payloads = []
-    for st in SEARCH_TARGETS:
-        payloads.append(
-            "\r\n".join(
-                [
-                    "M-SEARCH * HTTP/1.1",
-                    f"HOST: {SSDP_ADDRESS[0]}:{SSDP_ADDRESS[1]}",
-                    f'ST: "{st}"' if st == "ssdp:all" else f"ST: {st}",
-                    'MAN: "ssdp:discover"',
-                    f"MX: {max(1, int(timeout))}",
-                    "",
-                    "",
-                ]
-            ).encode("ascii")
-        )
+    payloads = [
+        "\r\n".join(
+            [
+                "M-SEARCH * HTTP/1.1",
+                f"HOST: {SSDP_ADDRESS[0]}:{SSDP_ADDRESS[1]}",
+                f'ST: "{st}"' if st == "ssdp:all" else f"ST: {st}",
+                'MAN: "ssdp:discover"',
+                f"MX: {max(1, int(timeout))}",
+                "",
+                "",
+            ]
+        ).encode("ascii")
+        for st in SEARCH_TARGETS
+    ]
 
     # Bind locally instead of remote_addr=: remote_addr connect()s the socket
     # to the multicast group, and a connected UDP socket drops the unicast
@@ -379,7 +392,9 @@ def build_magic_packet(mac: str) -> bytes:
     return b"\xff" * 6 + mac_bytes * 16
 
 
-async def async_send_wol(mac: str, port: int = 33129, repeat: int = 5, interval: float = 0.1) -> None:
+async def async_send_wol(
+    mac: str, port: int = 33129, repeat: int = 5, interval: float = 0.1
+) -> None:
     """Send a WOL magic packet the way the APK does (repeat x interval).
 
     Uses broadcast 255.255.255.255 like NetReceiver does.
@@ -388,7 +403,9 @@ async def async_send_wol(mac: str, port: int = 33129, repeat: int = 5, interval:
     loop = asyncio.get_running_loop()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    transport, _protocol = await loop.create_datagram_endpoint(lambda: asyncio.Protocol(), sock=sock)
+    transport, _protocol = await loop.create_datagram_endpoint(
+        lambda: asyncio.Protocol(), sock=sock
+    )
     try:
         for _ in range(max(1, repeat)):
             transport.sendto(packet, ("255.255.255.255", port))

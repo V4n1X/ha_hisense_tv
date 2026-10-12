@@ -12,7 +12,7 @@
   "issue_tracker": "https://github.com/V4n1X/ha_hisense_tv/issues",
   "loggers": ["aiomqtt"],
   "quality_scale": "bronze",
-  "requirements": ["aiomqtt>=2.0.0,<3.0.0"],
+  "requirements": ["aiomqtt>=2.0.0,<3.0.0", "defusedxml>=0.7.0"],
   "ssdp": [
     {
       "st": "urn:schemas-upnp-org:service:HisenseLanControl:1"
