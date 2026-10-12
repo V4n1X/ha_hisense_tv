@@ -156,11 +156,11 @@ The reverse-engineering community this project builds upon:
 
 ## Changelog
 
-### Unreleased
+### 1.4.0
 
 **Changed**
 
-- **Minimum Home Assistant version raised to 2026.9** (current release). The integration now uses the new device-registry API `async_get_device_by_identifier` introduced with the 2026.9 device-registry rework; the deprecated `async_get_device` fallback for older versions was removed.
+- **Minimum Home Assistant version raised to 2026.9**. The integration now uses the new device-registry API `async_get_device_by_identifier` introduced with the 2026.9 device-registry rework; the deprecated `async_get_device` fallback for older versions was removed.
 - **Code style is now enforced by ruff** (lint and format) using Home Assistant's official rule set, replacing the bare pyflakes check. CI verifies both lint and formatting; run locally with `python -m ruff check .` and `python -m ruff format .`.
 - **Pre-commit hooks** run ruff lint, ruff format and the encoding check before every commit — the same verdicts CI enforces. Enable once per clone with `pip install pre-commit && pre-commit install`.
 - **CI now runs on Python 3.14** and installs `homeassistant>=2026.9`. Home Assistant 2026.3 and newer require Python 3.14.2+, so on Python 3.13 the smoke test silently ran against HA 2026.2.
