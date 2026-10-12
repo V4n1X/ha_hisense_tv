@@ -1,19 +1,29 @@
-# Release Notes — v1.6.0
+# Release Notes — v1.6.1
 
-The README is restructured and the integration can now be installed and set up with one click from the documentation. There are no functional changes to the integration itself — updating is optional.
-
-## ✨ Added
-
-- **One-click install buttons** in the README and in `docs/INSTALLATION.md`:
-  - *Open your Home Assistant instance and open this repository inside the Home Assistant Community Store* — opens the repository in HACS (and offers to add it as a custom repository first).
-  - *Open your Home Assistant instance and start setting up a new integration* — starts the Hisense TV setup flow directly.
+Documentation and test-only patch. Two inaccuracies in the v1.6.0 README are
+corrected, and the documentation now has a test that keeps it in sync with the
+code. There are no functional changes to the integration itself — updating is
+optional.
 
 ## 📝 Documentation
 
-- **README restructured and tidied up:** features as a table, installation in three steps, highlighted notes for the migration, the Network Standby tip and the RemoteNOW warning, troubleshooting split into *Setup & pairing* and *Runtime*, and all 22 selectable buttons listed by group.
-- **The changelog no longer lives in the README.** Release notes for every version are on the [Releases page](https://github.com/V4n1X/ha_hisense_tv/releases).
-- The manual HACS steps are now folded away behind the buttons, and the menu path reads *⋮ → Custom repositories* as in current HACS versions.
+- **The button table now uses the labels the options flow really shows.** *Guide*
+  became *Guide (EPG)*, and the abbreviated *Volume ±* / *Channel ±* are spelled
+  out as *Volume up*, *Volume down*, *Channel up* and *Channel down*, so every
+  entry can be found by copy-pasting it into the multi-select.
+- **The `sensor` row lists the TV states again** (`sourceswitch`, `app`,
+  `livetv`, …) — the concrete examples dropped while the README was restructured
+  are back.
+
+## 🛠️ Under the hood
+
+- **New documentation drift gate** (`tests/test_docs.py`). The selectable
+  buttons were listed by hand in two documents while the code defines them in
+  `button.py`; the release version lived in two files at once. The new tests
+  fail CI when the README's button table, the quoted button counts, the default
+  button set or the release version drift from their source, the same way the
+  repo already guards encoding, formatting and coverage.
 
 ## 🔖 All changes
 
-See the [commit history](https://github.com/V4n1X/ha_hisense_tv/compare/v1.5.0...v1.6.0) for the complete list.
+See the [commit history](https://github.com/V4n1X/ha_hisense_tv/compare/v1.6.0...v1.6.1) for the complete list.
