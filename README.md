@@ -29,7 +29,7 @@ Tested against the protocol generation of RemoteNOW 5.x (Vidaa-U/VIDAA TVs, stan
 
 ### Prerequisites
 
-- Home Assistant ≥ **2024.3** with **HACS** installed
+- Home Assistant ≥ **2026.9** with **HACS** installed
 - TV and Home Assistant on the **same network**, TV powered **on during setup**
 - Recommendation: enable *Network Standby / Quick Start* on the TV (so automations can power it on later)
 
@@ -156,6 +156,26 @@ The reverse-engineering community this project builds upon:
 
 ## Changelog
 
+### Unreleased
+
+**Changed**
+
+- **Minimum Home Assistant version raised to 2026.9** (current release). The integration now uses the new device-registry API `async_get_device_by_identifier` introduced with the 2026.9 device-registry rework; the deprecated `async_get_device` fallback for older versions was removed.
+- **Code style is now enforced by ruff** (lint and format) using Home Assistant's official rule set, replacing the bare pyflakes check. CI verifies both lint and formatting; run locally with `python -m ruff check .` and `python -m ruff format .`.
+- **Pre-commit hooks** run ruff lint, ruff format and the encoding check before every commit — the same verdicts CI enforces. Enable once per clone with `pip install pre-commit && pre-commit install`.
+- **CI now runs on Python 3.14** and installs `homeassistant>=2026.9`. Home Assistant 2026.3 and newer require Python 3.14.2+, so on Python 3.13 the smoke test silently ran against HA 2026.2.
+
+**Fixed**
+
+- **SSDP scan never received any reply** ([#1](https://github.com/V4n1X/ha_hisense_tv/pull/1), thanks [@Anzic23](https://github.com/Anzic23)): `async_scan()` `connect()`ed its UDP socket to the multicast group, so the kernel dropped every unicast M-SEARCH reply. For a TV added by IP this meant the background enrichment never learned the MAC addresses and Wake-on-LAN stayed a no-op. The scan now binds locally, sends to the group explicitly and uses one datagram per search target.
+
+**Added**
+
+- **Coverage measurement** for the stub-mode unit suite (`pytest-cov`, branch coverage over `custom_components/hisense_tv`). CI prints missing lines and runs `scripts/coverage_gaps.py`, which maps uncovered lines to named functions/steps, and fails when line coverage drops below a ratchet threshold (`--cov-fail-under`). Locally: `python -m pytest tests --ignore=tests/test_ha_smoke.py --cov --cov-report=term-missing` then `python scripts/coverage_gaps.py` for the per-function gap report.
+- `defusedxml` runtime dependency for safely parsing untrusted UPnP device descriptions (XML entity-expansion hardening).
+- **Deprecation canary** (`scripts/deprecation_canary.py`, run by `tests/test_ha_smoke.py` in CI): boots a minimal real Home Assistant, sets the integration up, injects one capability push message (the code path that patches the device registry) and fails when Home Assistant reports deprecated API usage or a blocking call for `hisense_tv`.
+- Unit tests for the SSDP scan (unicast replies from the device's own address) and for the device-metadata helpers in `__init__.py` (background enrichment, registry refresh).
+
 ### 1.3.6
 
 **Changed**
@@ -219,7 +239,7 @@ The reverse-engineering community this project builds upon:
 **Improved**
 
 - Shared entity base (`entity.py`) removes duplicated code across all platform files (device info, WOL logic)
-- Background task via `entry.async_create_background_task` (HA-managed reference tracking, therefore minimum version HA 2024.3)
+- Background task via `entry.async_create_background_task` (HA-managed reference tracking)
 - Backwards-compatible translations (de/en) incl. `exceptions` schema, hassfest validation passes cleanly
 - `aiomqtt` requirement capped (`>=2.0.0,<3.0.0`)
 - Tested against Home Assistant 2026.8 (all modules import without deprecation warnings)
