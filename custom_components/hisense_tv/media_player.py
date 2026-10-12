@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 from typing import TYPE_CHECKING
@@ -12,8 +13,9 @@ from homeassistant.components.media_player import (
     MediaPlayerState,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ServiceValidationError
 
-from .const import KEY_COMMANDS, MEDIA_PLAYER_KEYS
+from .const import DOMAIN, KEY_COMMANDS, MEDIA_PLAYER_KEYS
 from .data import NotConnected
 from .entity import HisenseTvEntity, tv_not_connected_error
 
@@ -110,24 +112,13 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
         names.extend(app.name for app in self._tv_state.app_list)
         return names
 
-    async def _send(self, key: str) -> None:
-        """Send one remote key."""
-        await self._client.send_key(key)
-
     async def async_turn_on(self) -> None:
-        """Wake via WOL when enabled, then send the power key."""
-        if self._wol_enabled():
-            await self.async_wake_tv()
-        if self._client.connected:
-            await self._send(KEY_COMMANDS["power"])
+        """Wake via WOL, or the power key for a TV in fake sleep."""
+        await self.async_power_on()
 
     async def async_turn_off(self) -> None:
-        """Send the power key (a toggle; state feedback confirms)."""
-        # KEY_POWER is a toggle; the TV confirms via state feedback.
-        try:
-            await self._send(KEY_COMMANDS["power"])
-        except NotConnected as err:
-            raise tv_not_connected_error(err) from err
+        """Send the power key to a running TV (a toggle; state feedback confirms)."""
+        await self.async_power_off()
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set absolute volume and echo it locally (dedupe handled in TvState)."""
@@ -143,64 +134,67 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
 
     async def async_volume_up(self) -> None:
         """Send the volume-up key."""
-        await self._send(KEY_COMMANDS["volume_up"])
+        await self._send_key(KEY_COMMANDS["volume_up"])
 
     async def async_volume_down(self) -> None:
         """Send the volume-down key."""
-        await self._send(KEY_COMMANDS["volume_down"])
+        await self._send_key(KEY_COMMANDS["volume_down"])
 
     async def async_mute_volume(self, mute: bool) -> None:
-        """Send the mute toggle key (the protocol has no absolute mute state)."""
-        await self._send(KEY_COMMANDS["mute"])
+        """Reach the requested mute state with the protocol's toggle key.
+
+        The toggle is skipped when the TV already reports the requested
+        state; with an unknown state it is sent once.
+        """
+        if self._tv_state.muted is not None and self._tv_state.muted == mute:
+            return
+        await self._send_key(KEY_COMMANDS["mute"])
 
     async def async_media_play(self) -> None:
         """Send the play key."""
-        try:
-            await self._send(MEDIA_PLAYER_KEYS["play"])
-        except NotConnected as err:
-            raise tv_not_connected_error(err) from err
+        await self._send_key(MEDIA_PLAYER_KEYS["play"])
 
     async def async_media_pause(self) -> None:
         """Send the pause key."""
-        try:
-            await self._send(MEDIA_PLAYER_KEYS["pause"])
-        except NotConnected as err:
-            raise tv_not_connected_error(err) from err
+        await self._send_key(MEDIA_PLAYER_KEYS["pause"])
 
     async def async_media_stop(self) -> None:
         """Send the stop key."""
-        try:
-            await self._send(MEDIA_PLAYER_KEYS["stop"])
-        except NotConnected as err:
-            raise tv_not_connected_error(err) from err
+        await self._send_key(MEDIA_PLAYER_KEYS["stop"])
 
     async def async_media_next_track(self) -> None:
         """Send the next-track key."""
-        try:
-            await self._send(MEDIA_PLAYER_KEYS["next_track"])
-        except NotConnected as err:
-            raise tv_not_connected_error(err) from err
+        await self._send_key(MEDIA_PLAYER_KEYS["next_track"])
 
     async def async_media_previous_track(self) -> None:
         """Send the previous-track key."""
-        try:
-            await self._send(MEDIA_PLAYER_KEYS["previous_track"])
-        except NotConnected as err:
-            raise tv_not_connected_error(err) from err
+        await self._send_key(MEDIA_PLAYER_KEYS["previous_track"])
 
     async def async_select_source(self, source: str) -> None:
         """Switch to a source label or launch an app by name."""
-        for item in self._tv_state.source_list:
-            if item.label == source:
-                await self._client.select_source(item.sourceid)
-                return
-        for app in self._tv_state.app_list:
-            if app.name == source:
-                await self._client.launch_app(
-                    app.url, app.name, app.url_type, app.store_type
-                )
-                return
-        _LOGGER.warning("Unknown source %s", source)
+        try:
+            for item in self._tv_state.source_list:
+                if item.label == source:
+                    await self._client.select_source(item.sourceid)
+                    return
+            for app in self._tv_state.app_list:
+                if app.name == source:
+                    await self._client.launch_app(
+                        app.url, app.name, app.url_type, app.store_type
+                    )
+                    return
+        except NotConnected as err:
+            raise tv_not_connected_error(err) from err
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_source",
+            translation_placeholders={"source": source},
+        )
+
+    async def _async_request_source_list(self) -> None:
+        """Background source-list request; the TV may drop off meanwhile."""
+        with contextlib.suppress(NotConnected):
+            await self._client.request_source_list()
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -220,4 +214,4 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
         ):
             return
         self._source_requested_at = now
-        self.hass.async_create_task(self._client.request_source_list())
+        self.hass.async_create_task(self._async_request_source_list())

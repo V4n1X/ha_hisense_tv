@@ -240,4 +240,4 @@ class HisenseTvButton(HisenseTvEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Handle the button press by sending the remote key."""
-        await self._client.send_key(self.entity_description.key_command)
+        await self._send_key(self.entity_description.key_command)

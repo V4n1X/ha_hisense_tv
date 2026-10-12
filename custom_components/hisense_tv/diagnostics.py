@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
     from .__init__ import HisenseConfigEntry
 
-REDACT_KEYS = {"client_id", CONF_UUID, "mac_wifi", "mac_ethernet", "udn"}
+REDACT_KEYS = {"client_id", CONF_UUID, "mac_wifi", "mac_ethernet", "udn", "device_id"}
 
 
 async def async_get_config_entry_diagnostics(
@@ -64,5 +64,6 @@ async def async_get_config_entry_diagnostics(
             if state is not None
             else None
         ),
-        "capability": capability,
+        # device_id is the TV's own unique hardware id.
+        "capability": async_redact_data(capability, REDACT_KEYS),
     }

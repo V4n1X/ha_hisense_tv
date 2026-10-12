@@ -53,8 +53,8 @@
       "already_configured": "This TV is already configured",
       "not_hisense": "Discovered device is not a compatible Hisense TV",
       "cannot_connect": "Failed to connect",
-      "reconfirm_success": "TV address updated",
-      "reauth_successful": "The TV was re-paired successfully"
+      "reauth_successful": "The TV was re-paired successfully",
+      "reconfigure_successful": "The TV address was updated"
     }
   },
   "entity": {
@@ -150,24 +150,8 @@
         "data": {
           "poll_interval": "Poll interval for state refresh (seconds)",
           "enable_wol": "Use Wake-on-LAN to power the TV on",
-          "command_delay": "Delay between text input commands (ms)",
+          "command_delay": "Delay between remote commands (ms)",
           "buttons": "Buttons to create (multi-select)"
-        }
-      }
-    }
-  },
-  "issues": {
-    "pairing_lost": {
-      "title": "TV pairing lost",
-      "fix_flow": {
-        "flow_title": "Restore pairing",
-        "step": {
-          "init": {
-            "description": "Re-pairing with the TV will start. The TV will show a 4-digit code on screen - enter it in the dialog that opens."
-          }
-        },
-        "abort": {
-          "entry_gone": "The associated TV entry no longer exists."
         }
       }
     }
@@ -175,6 +159,9 @@
   "exceptions": {
     "tv_not_connected": {
       "message": "The TV is not connected: {error}"
+    },
+    "unknown_source": {
+      "message": "Unknown source: {source}"
     }
   }
 }

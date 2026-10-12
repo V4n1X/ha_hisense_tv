@@ -102,7 +102,14 @@ class FakeEntry:
 def registry(monkeypatch) -> FakeDeviceRegistry:
     """Route the integration's device registry access to a recording fake."""
     fake = FakeDeviceRegistry(device=SimpleNamespace(id="device-1"))
-    monkeypatch.setattr(hisense_tv, "dr", SimpleNamespace(async_get=lambda _hass: fake))
+    monkeypatch.setattr(
+        hisense_tv,
+        "dr",
+        SimpleNamespace(
+            async_get=lambda _hass: fake,
+            async_entries_for_config_entry=lambda _registry, _entry_id: [],
+        ),
+    )
     return fake
 
 

@@ -136,7 +136,11 @@ class HisenseTvClient:
         self._client: Any = None
         self._task: asyncio.Task[None] | None = None
         self._stopping = False
-        self._events: deque[tuple[str, Any]] = deque(maxlen=64)
+        # Bounded ring of (sequence, name, data). Waiters remember a sequence
+        # number, not a ring index: once the ring is full every index stays
+        # below its length, so an index marker would never match again.
+        self._events: deque[tuple[int, str, Any]] = deque(maxlen=64)
+        self._next_seq = 0
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -244,9 +248,16 @@ class HisenseTvClient:
             self._client = client
             self.active_tls = tls
             self.connected = True
-            for topic in (SUBSCRIBE_BROADCAST, subscribe_own(self.client_id)):
-                await client.subscribe(topic)
-                _LOGGER.debug("Subscribed: %s", topic)
+            try:
+                for topic in (SUBSCRIBE_BROADCAST, subscribe_own(self.client_id)):
+                    await client.subscribe(topic)
+                    _LOGGER.debug("Subscribed: %s", topic)
+            except Exception as err:
+                # Without the feedback topics the connection is useless; close
+                # it instead of leaking an open broker session to the caller.
+                self.connected = False
+                await self._disconnect()
+                raise CannotConnect(f"{self.host}:{self.port}: {err}") from err
             self._emit(DISPATCH_CONNECTION, True)
             _LOGGER.debug("Connected to %s:%s (tls=%s)", self.host, self.port, tls)
             return
@@ -312,18 +323,26 @@ class HisenseTvClient:
 
     def recent_events(self) -> list[tuple[str, Any]]:
         """Snapshot of recent feedback events (used during pairing)."""
-        return list(self._events)
+        return [(name, data) for _seq, name, data in self._events]
+
+    def event_marker(self) -> int:
+        """Sequence number the next event will get; pass to wait_for_event."""
+        return self._next_seq
+
+    def events_since(self, marker: int) -> list[tuple[int, str, Any]]:
+        """Events still in the ring whose sequence number is >= marker."""
+        return [event for event in self._events if event[0] >= marker]
 
     def pop_event(self, name: str, after_index: int = 0) -> tuple[Any, int] | None:
-        """Return the newest queued event matching name, plus its index."""
-        for index in range(len(self._events) - 1, -1, -1):
-            event_name, data = self._events[index]
-            if event_name == name and index >= after_index:
-                return data, index
+        """Return the newest queued event matching name, plus its sequence."""
+        for seq, event_name, data in reversed(self.events_since(after_index)):
+            if event_name == name:
+                return data, seq
         return None
 
     def _emit(self, name: str, data: Any) -> None:
-        self._events.append((name, data))
+        self._events.append((self._next_seq, name, data))
+        self._next_seq += 1
         if self.on_event is not None:
             try:
                 self.on_event(name, data)
@@ -457,20 +476,18 @@ async def wait_for_event(
     timeout: float,
     start_index: int = 0,
 ) -> tuple[str, Any]:
-    """Wait until one of the named events arrives (polling the event ring)."""
+    """Wait until one of the named events arrives (polling the event ring).
+
+    ``start_index`` is a sequence marker from ``client.event_marker()``; only
+    events emitted at or after it count. The newest match wins.
+    """
     if isinstance(names, str):
         names = frozenset({names})
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
-        best: tuple[int, str, Any] | None = None
-        snapshot = client.recent_events()
-        for index in range(len(snapshot) - 1, -1, -1):
-            event_name, data = snapshot[index]
-            if event_name in names and index >= start_index:
-                if best is None or index > best[0]:
-                    best = (index, event_name, data)
-        if best is not None:
-            return best[1], best[2]
+        for _seq, event_name, data in reversed(client.events_since(start_index)):
+            if event_name in names:
+                return event_name, data
         remaining = deadline - asyncio.get_running_loop().time()
         if remaining <= 0:
             raise TimeoutError(f"No {sorted(names)} within {timeout}s")

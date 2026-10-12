@@ -3,25 +3,30 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import (
+    SOURCE_REAUTH,
+    SOURCE_RECONFIGURE,
+    SOURCE_USER,
     ConfigEntry,
+    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlowWithReload,
 )
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
 )
-import voluptuous as vol
+import probatio
 
 from .button import BUTTON_DESCRIPTIONS
 from .const import (
@@ -64,6 +69,7 @@ from .discovery import (
     DiscoveredTV,
     async_discover_tvs,
     fetch_description,
+    format_mac,
     host_from_location,
     parse_upnp_dict,
 )
@@ -81,18 +87,66 @@ class PairingRequired(Exception):
     """The TV pushed an /authentication request while probing."""
 
 
-def _host_schema(host: str | None) -> vol.Schema:
-    return vol.Schema(
+def _host_schema(host: str | None) -> probatio.Schema:
+    return probatio.Schema(
         {
-            vol.Optional(CONF_HOST, description={"suggested_value": host or ""}): str,
-            vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-            vol.Optional(CONF_NAME, description={"suggested_value": ""}): str,
+            probatio.Optional(
+                CONF_HOST, description={"suggested_value": host or ""}
+            ): str,
+            probatio.Required(CONF_PORT, default=DEFAULT_PORT): int,
+            probatio.Optional(CONF_NAME, description={"suggested_value": ""}): str,
         }
     )
 
 
-def _pin_schema(errors: dict[str, str] | None = None) -> vol.Schema:
-    return vol.Schema({vol.Required(PIN_FIELD): str})
+def _pin_schema() -> probatio.Schema:
+    return probatio.Schema({probatio.Required(PIN_FIELD): str})
+
+
+def _tv_macs(tv: DiscoveredTV | None) -> list[str]:
+    """MACs a discovered TV advertises (wifi first)."""
+    if tv is None:
+        return []
+    return [mac for mac in (tv.mac_wifi, tv.mac_ethernet) if mac]
+
+
+def _entry_macs(entry: ConfigEntry) -> set[str]:
+    """Normalized MACs stored on a config entry."""
+    return {
+        format_mac(str(entry.data[key]))
+        for key in (CONF_MAC_WIFI, CONF_MAC_ETHERNET)
+        if entry.data.get(key)
+    }
+
+
+def _tv_unique_id(tv: DiscoveredTV | None) -> str | None:
+    """Device identity for the entry: MAC, else UDN - never the IP address."""
+    if tv is None or not (tv.mac_wifi or tv.mac_ethernet or tv.udn):
+        return None
+    return tv.unique_id
+
+
+def _tv_metadata(tv: DiscoveredTV | None) -> dict[str, Any]:
+    """Entry data learned from SSDP; empty values are left out.
+
+    Leaving them out lets a reconfigure/reauth merge keep what the entry
+    already knows instead of blanking it with an incomplete description.
+    """
+    if tv is None:
+        return {}
+    values: dict[str, Any] = {
+        CONF_MODEL_NAME: tv.model_name,
+        CONF_TV_VERSION: tv.tv_version,
+        CONF_UDN: tv.udn,
+        CONF_REGION: tv.region,
+        CONF_COUNTRY: tv.country,
+        CONF_LANGUAGE: tv.language,
+        CONF_PLATFORM_VERSION: tv.extras.get("platform", ""),
+        CONF_TRANSPORT_PROTOCOL: tv.transport_protocol,
+        CONF_MAC_WIFI: tv.mac_wifi,
+        CONF_MAC_ETHERNET: tv.mac_ethernet,
+    }
+    return {key: value for key, value in values.items() if value not in ("", None)}
 
 
 class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -110,8 +164,6 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
         self._friendly_name: str = ""
         self._probe_client: HisenseTvClient | None = None
         self._scan_results: list[DiscoveredTV] = []
-        self._is_reconfiguring: bool = False
-        self._reauth_target_entry_id: str | None = None
 
     # ------------------------------------------------------------------
     # helpers
@@ -120,6 +172,56 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
     def _probe(self) -> HisenseTvClient:
         assert self._probe_client is not None
         return self._probe_client
+
+    @callback
+    def async_remove(self) -> None:
+        """Close a probe connection the user abandoned (e.g. at the PIN step).
+
+        The probe client runs its own reconnect loop; without this it would
+        keep an MQTT session to the TV open until Home Assistant restarts.
+        """
+        if (client := self._probe_client) is not None:
+            self._probe_client = None
+            self.hass.async_create_task(client.stop(), "hisense_tv probe cleanup")
+
+    async def _stop_probe(self) -> None:
+        if (client := self._probe_client) is not None:
+            self._probe_client = None
+            await client.stop()
+
+    def _find_configured_entry(
+        self, host: str | None, macs: Iterable[str]
+    ) -> ConfigEntry | None:
+        """Existing entry for this TV: matched by MAC, else by host.
+
+        The host only counts when one side has no MAC to compare - a
+        different TV may well have inherited the IP of a configured one.
+        """
+        wanted = {format_mac(mac) for mac in macs if mac}
+        entries = self._async_current_entries(include_ignore=False)
+        for entry in entries:
+            if wanted & _entry_macs(entry):
+                return entry
+        if host:
+            for entry in entries:
+                if entry.data.get(CONF_HOST) == host and not (
+                    wanted and _entry_macs(entry)
+                ):
+                    return entry
+        return None
+
+    def _abort_if_tv_configured(
+        self, host: str | None, macs: Iterable[str], updates: dict[str, Any]
+    ) -> None:
+        """Abort when the TV already has an entry, moving it to the new address."""
+        entry = self._find_configured_entry(host, macs)
+        if entry is None:
+            return
+        if self.hass.config_entries.async_update_entry(
+            entry, data={**entry.data, **updates}
+        ) and entry.state in (ConfigEntryState.LOADED, ConfigEntryState.SETUP_RETRY):
+            self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        raise AbortFlow("already_configured")
 
     async def _validate(self) -> str:
         """Connect + probe. Raises CannotConnect / PairingRequired."""
@@ -140,9 +242,18 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._discovered = tv
                 self._use_tls = tv.use_tls
 
+        if self.source == SOURCE_USER:
+            # Before probing: a duplicate must not walk through PIN pairing.
+            self._abort_if_tv_configured(
+                self._host,
+                _tv_macs(self._discovered),
+                {CONF_HOST: self._host, CONF_PORT: self._port},
+            )
+
         if not self._client_id:
             self._client_id = new_client_id()
 
+        await self._stop_probe()
         client = HisenseTvClient(
             host=self._host,
             port=self._port,
@@ -151,8 +262,9 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
             client_cert_path=default_client_cert_path(),
         )
         await client.start()  # CannotConnect bubbles up
+        self._probe_client = client
 
-        marker = len(client.recent_events())
+        marker = client.event_marker()
         await client.get_tv_state()
         _LOGGER.debug(
             "Probe %s:%s sent gettvstate (tls=%s)",
@@ -160,11 +272,13 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
             self._port,
             client.active_tls,
         )
+        if self._use_tls is None:
+            self._use_tls = client.active_tls
         try:
             # Only /authentication proves "pairing needed". Spontaneous
             # broadcast state updates (e.g. voicestate) must not be mistaken
             # for a successful auth probe; timeout means no pairing gate.
-            _event_name, _payload = await wait_for_event(
+            _event_name, payload = await wait_for_event(
                 client,
                 PROBE_WAIT_EVENTS,
                 PROBE_TIMEOUT,
@@ -173,15 +287,9 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
         except TimeoutError:
             # Older firmware: no push feedback, no pairing gate -> accept.
             _LOGGER.debug("Probe finished without pairing gate")
-            self._probe_client = client
-            if self._use_tls is None:
-                self._use_tls = client.active_tls
             return "ok"
 
-        if self._use_tls is None:
-            self._use_tls = client.active_tls
-        _LOGGER.debug("Probe: TV requests pairing (%s)", _payload)
-        self._probe_client = client
+        _LOGGER.debug("Probe: TV requests pairing (%s)", payload)
         raise PairingRequired
 
     async def _lookup_metadata(self) -> DiscoveredTV | None:
@@ -197,76 +305,51 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
     async def _finish(self) -> ConfigFlowResult:
         """Disconnect the probe connection and store the result."""
         tv = self._discovered or await self._lookup_metadata()
-        if self._probe_client is not None:
-            await self._probe_client.stop()
-            self._probe_client = None
+        await self._stop_probe()
 
-        friendly = self._friendly_name or (tv.name if tv else "") or DEFAULT_NAME
-        data: dict[str, Any] = {
+        connection: dict[str, Any] = {
             CONF_HOST: self._host,
             CONF_PORT: self._port,
-            CONF_NAME: friendly,
             CONF_USE_TLS: bool(self._use_tls),
             CONF_UUID: self._client_id,
             "client_id": self._client_id,
         }
-        if tv is not None:
-            data.update(
-                {
-                    CONF_MODEL_NAME: tv.model_name,
-                    CONF_TV_VERSION: tv.tv_version,
-                    CONF_UDN: tv.udn,
-                    CONF_REGION: tv.region,
-                    CONF_COUNTRY: tv.country,
-                    CONF_LANGUAGE: tv.language,
-                    CONF_PLATFORM_VERSION: tv.extras.get("platform", ""),
-                    CONF_TRANSPORT_PROTOCOL: tv.transport_protocol,
-                }
+        metadata = _tv_metadata(tv)
+
+        if self.source in (SOURCE_REAUTH, SOURCE_RECONFIGURE):
+            # Reauth (the TV forgot us) and reconfigure (new address) both
+            # update the existing entry; its title and name stay untouched.
+            entry = (
+                self._get_reauth_entry()
+                if self.source == SOURCE_REAUTH
+                else self._get_reconfigure_entry()
             )
-            if tv.mac_wifi:
-                data[CONF_MAC_WIFI] = tv.mac_wifi
-            if tv.mac_ethernet:
-                data[CONF_MAC_ETHERNET] = tv.mac_ethernet
-
-        if self._reauth_target_entry_id is not None:
-            # Reauth path: the TV forgot us. Keep the entry (and its title /
-            # name), swap in the fresh client identity and connection data.
-            entry = self.hass.config_entries.async_get_entry(
-                self._reauth_target_entry_id
+            return self.async_update_reload_and_abort(
+                entry, data={**entry.data, **metadata, **connection}
             )
-            if entry is None:
-                return self.async_abort(reason="reauth_successful")
-            merged = {**entry.data, **data}
-            if not self._friendly_name and entry.data.get(CONF_NAME):
-                merged[CONF_NAME] = entry.data.get(CONF_NAME)
-            self.hass.config_entries.async_update_entry(entry, data=merged)
-            from .repairs import async_delete_pairing_lost_issue  # noqa: PLC0415
 
-            async_delete_pairing_lost_issue(self.hass, entry.entry_id)
-            await self.hass.config_entries.async_reload(entry.entry_id)
-            return self.async_abort(reason="reauth_successful")
+        if unique_id := _tv_unique_id(tv):
+            await self.async_set_unique_id(unique_id, raise_on_progress=False)
+            self._abort_if_unique_id_configured(
+                updates={CONF_HOST: self._host, CONF_PORT: self._port}
+            )
 
-        if self._is_reconfiguring:
-            # Reconfigure path (possibly reached through the pairing step):
-            # update the existing entry instead of creating a new one.
-            entry = self._get_reconfigure_entry()
-            merged = {**entry.data, **data}
-            if not tv:
-                # Keep previous metadata when nothing better was found.
-                for key in (
-                    CONF_MODEL_NAME,
-                    CONF_TV_VERSION,
-                    CONF_UDN,
-                    CONF_REGION,
-                    CONF_COUNTRY,
-                    CONF_LANGUAGE,
-                    CONF_PLATFORM_VERSION,
-                    CONF_TRANSPORT_PROTOCOL,
-                ):
-                    merged[key] = entry.data.get(key, merged.get(key, ""))
-            return self.async_create_entry(title=entry.title, data=merged)
+        friendly = self._friendly_name or (tv.name if tv else "") or DEFAULT_NAME
+        return self.async_create_entry(
+            title=friendly, data={**connection, CONF_NAME: friendly, **metadata}
+        )
 
-        return self.async_create_entry(title=friendly, data=data)
+    async def _probe_step(self) -> ConfigFlowResult | dict[str, str]:
+        """Run the probe; returns the next result, or form errors to show."""
+        try:
+            await self._validate()
+        except CannotConnect:
+            return {"base": "cannot_connect"}
+        except PairingRequired:
+            return self.async_show_form(
+                step_id="pairing", data_schema=_pin_schema(), errors={}
+            )
+        return await self._finish()
 
     # ------------------------------------------------------------------
     # user initiated setup
@@ -295,20 +378,13 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 self._host = host
                 self._port = port
-                try:
-                    result = await self._validate()
-                except CannotConnect:
-                    errors["base"] = "cannot_connect"
-                except PairingRequired:
-                    return self.async_show_form(
-                        step_id="pairing", data_schema=_pin_schema(), errors={}
-                    )
-                else:
-                    if result == "ok":
-                        return await self._finish()
+                result = await self._probe_step()
+                if "type" in result:
+                    return result
+                errors = result
 
         return self.async_show_form(
-            step_id="user", data_schema=_host_schema(None), errors=errors
+            step_id="user", data_schema=_host_schema(self._host), errors=errors
         )
 
     async def async_step_discover(
@@ -333,25 +409,16 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._use_tls = tv.use_tls
                 if tv.name:
                     self._friendly_name = tv.name
-                await self.async_set_unique_id(tv.unique_id)
-                self._abort_if_unique_id_configured(
-                    updates={CONF_HOST: tv.host, CONF_PORT: tv.mqtt_port}
-                )
-                try:
-                    result = await self._validate()
-                except CannotConnect:
-                    errors["base"] = "cannot_connect"
-                except PairingRequired:
-                    return self.async_show_form(
-                        step_id="pairing", data_schema=_pin_schema(), errors={}
-                    )
-                else:
-                    if result == "ok":
-                        return await self._finish()
+                result = await self._probe_step()
+                if "type" in result:
+                    return result
+                errors = result
 
         return self.async_show_form(
             step_id="discover",
-            data_schema=vol.Schema({vol.Required("device"): vol.In(options)}),
+            data_schema=probatio.Schema(
+                {probatio.Required("device"): probatio.In(options)}
+            ),
             errors=errors,
         )
 
@@ -370,7 +437,7 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
         assert user_input is not None
         pin = str(user_input[PIN_FIELD]).strip()
         client = self._probe
-        marker = len(client.recent_events())
+        marker = client.event_marker()
         _LOGGER.debug("Submitting pairing code to %s", client.host)
         await client.submit_pairing_code(pin)
         try:
@@ -398,16 +465,10 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
         self, entry_data: Mapping[str, Any]
     ) -> ConfigFlowResult:
         """Start re-pairing with a fresh client identity for this entry."""
-        entry_id = self.context.get("entry_id")
-        self._reauth_target_entry_id = str(entry_id) if entry_id else None
         self._host = str(entry_data.get(CONF_HOST) or "")
         self._port = int(entry_data.get(CONF_PORT) or DEFAULT_PORT)
         self._use_tls = entry_data.get(CONF_USE_TLS)
         self._client_id = ""  # fresh identity - the TV forgot the old one
-        self._friendly_name = ""
-        self._discovered = None
-        name = str(entry_data.get(CONF_NAME) or self._host)
-        self.context["title_placeholders"] = {"name": name}
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
@@ -416,27 +477,16 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
         """Probe the TV: pairing gate only appears when the old pairing is gone."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            try:
-                result = await self._validate()
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
-            except PairingRequired:
-                return self.async_show_form(
-                    step_id="pairing", data_schema=_pin_schema(), errors={}
-                )
-            else:
-                if result == "ok":
-                    # The TV still knows this client - pairing was not lost.
-                    _LOGGER.debug("Reauth probe succeeded without pairing")
-                    return await self._finish()
+            result = await self._probe_step()
+            if "type" in result:
+                return result
+            errors = result
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=vol.Schema({}),
+            data_schema=probatio.Schema({}),
             errors=errors,
-            description_placeholders={
-                "name": str(self.context.get("title_placeholders", {}).get("name", "")),
-            },
+            description_placeholders={"name": self._get_reauth_entry().title},
         )
 
     # ------------------------------------------------------------------
@@ -446,25 +496,16 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
         self, discovery_info: SsdpServiceInfo
     ) -> ConfigFlowResult:
         """Handle SSDP discovery: parse the description and ask for confirmation."""
-        location = getattr(discovery_info, "ssdp_location", None)
-        headers = getattr(discovery_info, "ssdp_headers", {}) or {}
-        if not location and isinstance(headers, dict):
-            location = headers.get("location") or headers.get("LOCATION")
-        if (
-            not location
-            and hasattr(discovery_info, "upnp")
-            and isinstance(discovery_info.upnp, dict)
-        ):
-            location = discovery_info.upnp.get("location")
+        upnp = discovery_info.upnp if isinstance(discovery_info.upnp, Mapping) else {}
+        headers = discovery_info.ssdp_headers or {}
+        location = (
+            discovery_info.ssdp_location
+            or headers.get("location")
+            or headers.get("LOCATION")
+            or upnp.get("location")
+        )
 
-        host = ""
-        if location:
-            host = host_from_location(location) or ""
-        if not host:
-            ip = getattr(discovery_info, "ip_address", None) or getattr(
-                discovery_info, "host", None
-            )
-            host = str(ip) if ip else ""
+        host = (host_from_location(location) or "") if location else ""
 
         tv: DiscoveredTV | None = None
         if location:
@@ -472,12 +513,8 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
                 tv = await fetch_description(location)
             except Exception as ex:  # noqa: BLE001
                 _LOGGER.debug("SSDP fetch_description error: %s", ex)
-        if (
-            tv is None
-            and hasattr(discovery_info, "upnp")
-            and isinstance(discovery_info.upnp, dict)
-        ):
-            tv = parse_upnp_dict(discovery_info.upnp, host=host)
+        if tv is None and upnp:
+            tv = parse_upnp_dict(dict(upnp), host=host)
 
         if tv is None:
             return self.async_abort(reason="not_hisense")
@@ -485,6 +522,10 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
         if host and not tv.host:
             tv.host = host
 
+        # Also catches entries added by IP, which have no unique id to match.
+        self._abort_if_tv_configured(
+            tv.host, _tv_macs(tv), {CONF_HOST: tv.host, CONF_PORT: tv.mqtt_port}
+        )
         await self.async_set_unique_id(tv.unique_id)
         self._abort_if_unique_id_configured(
             updates={CONF_HOST: tv.host, CONF_PORT: tv.mqtt_port}
@@ -500,26 +541,19 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Confirmation step shared by SSDP and DHCP discovery."""
+        """Confirmation step for a TV found by SSDP."""
         errors: dict[str, str] = {}
         tv = self._discovered
         assert tv is not None
         if user_input is not None:
-            try:
-                result = await self._validate()
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
-            except PairingRequired:
-                return self.async_show_form(
-                    step_id="pairing", data_schema=_pin_schema(), errors={}
-                )
-            else:
-                if result == "ok":
-                    return await self._finish()
+            result = await self._probe_step()
+            if "type" in result:
+                return result
+            errors = result
 
         return self.async_show_form(
             step_id="confirm",
-            data_schema=vol.Schema({}),
+            data_schema=probatio.Schema({}),
             errors=errors,
             description_placeholders={
                 "name": tv.name or tv.host,
@@ -532,50 +566,14 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_dhcp(
         self, discovery_info: DhcpServiceInfo
     ) -> ConfigFlowResult:
-        """DHCP discovery: cheap metadata lookup only, no MQTT probe.
+        """A registered TV was seen on DHCP (manifest: registered_devices).
 
-        Discovery steps should return fast; the full connection probe (and any
-        pairing) happens on the confirm step when the user accepts.
+        The matcher only fires for MACs already in the device registry, so
+        this never sets up a new TV: it follows an IP change of a configured
+        one and aborts, without showing a discovery card.
         """
-        host = getattr(discovery_info, "ip", None)
-        if not host:
-            return self.async_abort(reason="not_hisense")
-        self._host = str(host)
-        self._port = DEFAULT_PORT
-        # Best-effort SSDP metadata enrichment (bounded, non-fatal).
-        tv = await self._lookup_metadata()
-        if tv is not None:
-            self._discovered = tv
-            self._port = tv.mqtt_port or self._port
-            self._use_tls = tv.use_tls
-            self._friendly_name = tv.name
-        else:
-            self._friendly_name = f"Hisense TV ({self._host})"
-        self.context["title_placeholders"] = {"name": self._friendly_name}
-        return await self.async_step_confirm()
-
-    async def async_step_reconfirm(
-        self, discovery_info: DhcpServiceInfo
-    ) -> ConfigFlowResult:
-        """A registered TV reappeared under a different IP address."""
-        host = getattr(discovery_info, "ip", None)
-        mac = getattr(discovery_info, "macaddress", None)
-        if not host or not mac:
-            return self.async_abort(reason="not_hisense")
-
-        normalized = str(mac).upper().replace(":", "").replace("-", "")
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            stored_macs = {
-                str(entry.data.get(key, "")).replace(":", "").replace("-", "").upper()
-                for key in (CONF_MAC_WIFI, CONF_MAC_ETHERNET)
-            }
-            if normalized in stored_macs and normalized:
-                if entry.data.get(CONF_HOST) != host:
-                    self.hass.config_entries.async_update_entry(
-                        entry, data={**entry.data, CONF_HOST: str(host)}
-                    )
-                    return self.async_abort(reason="reconfirm_success")
-                return self.async_abort(reason="already_configured")
+        mac = format_mac(discovery_info.macaddress)
+        self._abort_if_tv_configured(None, [mac], {CONF_HOST: discovery_info.ip})
         return self.async_abort(reason="not_hisense")
 
     # ------------------------------------------------------------------
@@ -586,62 +584,26 @@ class HisenseTvConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Manual host/port change with full revalidation before saving."""
         entry = self._get_reconfigure_entry()
-        self._is_reconfiguring = True
         errors: dict[str, str] = {}
         if user_input is not None:
-            old_host = str(entry.data.get(CONF_HOST))
-            host = str(user_input[CONF_HOST]).strip()
-            port = int(user_input[CONF_PORT])
-            if host != old_host:
-                # New address: forget per-host metadata so SSDP can re-enrich.
-                self._discovered = None
-            self._host = host
-            self._port = port
+            self._host = str(user_input[CONF_HOST]).strip()
+            self._port = int(user_input[CONF_PORT])
             self._use_tls = None  # re-detect on the new address
+            self._discovered = None  # SSDP re-enriches for the new address
             self._client_id = str(entry.data.get(CONF_UUID) or new_client_id())
-            try:
-                result = await self._validate()
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
-            except PairingRequired:
-                return self.async_show_form(
-                    step_id="pairing", data_schema=_pin_schema(), errors={}
-                )
-            else:
-                if result == "ok":
-                    tv = self._discovered or await self._lookup_metadata()
-                    new_data = {
-                        **entry.data,
-                        CONF_HOST: host,
-                        CONF_PORT: port,
-                        CONF_USE_TLS: bool(self._use_tls),
-                    }
-                    if tv is not None:
-                        new_data.update(
-                            {
-                                CONF_MODEL_NAME: tv.model_name
-                                or entry.data.get(CONF_MODEL_NAME, ""),
-                                CONF_TV_VERSION: tv.tv_version
-                                or entry.data.get(CONF_TV_VERSION, ""),
-                                CONF_MAC_WIFI: tv.mac_wifi
-                                or entry.data.get(CONF_MAC_WIFI, ""),
-                                CONF_MAC_ETHERNET: tv.mac_ethernet
-                                or entry.data.get(CONF_MAC_ETHERNET, ""),
-                            }
-                        )
-                    if self._probe_client is not None:
-                        await self._probe_client.stop()
-                        self._probe_client = None
-                    return self.async_create_entry(title=entry.title, data=new_data)
+            result = await self._probe_step()
+            if "type" in result:
+                return result
+            errors = result
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=vol.Schema(
+            data_schema=probatio.Schema(
                 {
-                    vol.Required(
+                    probatio.Required(
                         CONF_HOST, default=str(entry.data.get(CONF_HOST, ""))
                     ): str,
-                    vol.Required(
+                    probatio.Required(
                         CONF_PORT, default=int(entry.data.get(CONF_PORT, DEFAULT_PORT))
                     ): int,
                 }
@@ -675,21 +637,21 @@ class HisenseTvOptionsFlowHandler(OptionsFlowWithReload):
             SelectOptionDict(value=description.key, label=description.label)
             for description in BUTTON_DESCRIPTIONS
         ]
-        schema = vol.Schema(
+        schema = probatio.Schema(
             {
-                vol.Required(
+                probatio.Required(
                     CONF_POLL_INTERVAL,
                     default=options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
-                ): vol.All(vol.Coerce(int), vol.Range(min=5, max=600)),
-                vol.Required(
+                ): probatio.All(probatio.Coerce(int), probatio.Range(min=5, max=600)),
+                probatio.Required(
                     CONF_ENABLE_WOL,
                     default=options.get(CONF_ENABLE_WOL, DEFAULT_ENABLE_WOL),
                 ): bool,
-                vol.Required(
+                probatio.Required(
                     CONF_COMMAND_DELAY,
                     default=options.get(CONF_COMMAND_DELAY, DEFAULT_COMMAND_DELAY),
-                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=500)),
-                vol.Required(
+                ): probatio.All(probatio.Coerce(int), probatio.Range(min=0, max=500)),
+                probatio.Required(
                     CONF_BUTTONS,
                     default=list(options.get(CONF_BUTTONS, DEFAULT_BUTTONS)),
                 ): SelectSelector(

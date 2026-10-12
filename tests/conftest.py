@@ -46,8 +46,8 @@ def _register(name: str, **attrs: object) -> types.ModuleType:
 
 def _install_stubs() -> None:
     """Minimal homeassistant stand-ins (local dev without the HA package)."""
-    if importlib.util.find_spec("voluptuous") is None:
-        vol_mod = _register("voluptuous")
+    if importlib.util.find_spec("probatio") is None:
+        vol_mod = _register("probatio")
 
         class _Schema:
             def __init__(self, schema: object = None, **kwargs: object) -> None:
@@ -72,7 +72,6 @@ def _install_stubs() -> None:
         REMOTE = "remote"
         SENSOR = "sensor"
         BUTTON = "button"
-        REPAIRS = "repairs"
 
     class _ButtonEntity:
         pass
@@ -120,6 +119,7 @@ def _install_stubs() -> None:
         CONNECTION_NETWORK_MAC="mac",
     )
     dr.async_get = lambda _hass: _DeviceRegistry()  # type: ignore[attr-defined]
+    dr.async_entries_for_config_entry = lambda _registry, _entry_id: []  # type: ignore[attr-defined]
 
     def _callback(fn):
         return fn
@@ -189,46 +189,6 @@ def _install_stubs() -> None:
         SelectSelectorMode=type("SelectSelectorMode", (), {"DROPDOWN": "dropdown"}),
     )
 
-    class _RepairsFlow:
-        """Minimal stand-in for the repairs flow base class."""
-
-        issue_id: str | None = None
-        data: dict | None = None
-
-        def async_show_form(self, **kwargs: object) -> dict:
-            return {"type": "form", **kwargs}
-
-        def async_create_entry(self, **kwargs: object) -> dict:
-            return {"type": "create_entry", **kwargs}
-
-        def async_abort(self, **kwargs: object) -> dict:
-            return {"type": "abort", **kwargs}
-
-    _register(
-        "homeassistant.components.repairs",
-        RepairsFlow=_RepairsFlow,
-        ConfirmRepairFlow=type("ConfirmRepairFlow", (_RepairsFlow,), {}),
-    )
-
-    class _IssueSeverity:
-        ERROR = "error"
-        WARNING = "warning"
-        CRITICAL = "critical"
-
-    issue_registry = _register(
-        "homeassistant.helpers.issue_registry",
-        IssueSeverity=_IssueSeverity,
-    )
-    issue_registry.async_get = lambda hass: getattr(hass, "issue_registry", None)
-    issue_registry.async_create_issue = lambda hass, domain, issue_id, **kwargs: (
-        issue_registry.async_get(hass).async_create_issue(
-            hass, domain, issue_id, **kwargs
-        )
-    )
-    issue_registry.async_delete_issue = lambda hass, domain, issue_id: (
-        issue_registry.async_get(hass).async_delete(domain, issue_id)
-    )
-
     class _ConfigFlow:
         def __init_subclass__(cls, **kwargs: object) -> None:
             super().__init_subclass__()
@@ -246,12 +206,25 @@ def _install_stubs() -> None:
         def __init__(self, *args: object, **kwargs: object) -> None:
             pass
 
+    class _ConfigEntryState:
+        LOADED = "loaded"
+        SETUP_RETRY = "setup_retry"
+
     _register(
         "homeassistant.config_entries",
         ConfigEntry=type("ConfigEntry", (), {"entry_id": "test-entry"}),
+        ConfigEntryState=_ConfigEntryState,
         ConfigFlowResult=dict,
         ConfigFlow=_ConfigFlow,
         OptionsFlowWithReload=_OptionsFlowWithReload,
+        SOURCE_REAUTH="reauth",
+        SOURCE_RECONFIGURE="reconfigure",
+        SOURCE_USER="user",
+    )
+
+    _register(
+        "homeassistant.data_entry_flow",
+        AbortFlow=type("AbortFlow", (Exception,), {}),
     )
 
 
@@ -266,3 +239,58 @@ HAS_REAL_HA = (
 
 if not HAS_REAL_HA:
     _install_stubs()
+
+
+# ---------------------------------------------------------------------------
+# Real Home Assistant harness
+# ---------------------------------------------------------------------------
+#
+# pytest-homeassistant-custom-component cannot be used: it imports
+# homeassistant.runner, which needs the POSIX-only ``fcntl`` module, so it
+# breaks every test run on Windows. This boots the same minimal core the
+# deprecation canary uses (config entries, loader, registries) - enough to
+# drive real config flows and entities, without HTTP/auth.
+
+if HAS_REAL_HA:
+    import pytest
+    import pytest_asyncio
+
+    # HA's loader imports the integration as ``custom_components.hisense_tv``.
+    # That is a different module object than the ``hisense_tv`` the unit tests
+    # import, so real-HA tests must patch names in the ``custom_components``
+    # copy (see the ``ha_integration`` fixture).
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+
+    @pytest_asyncio.fixture
+    async def hass(tmp_path):
+        """A minimal, real Home Assistant instance for flow/entity tests."""
+        from homeassistant import config_entries, core, loader
+        from homeassistant.helpers import (
+            device_registry as dr,
+            entity_registry as er,
+            frame,
+            issue_registry as ir,
+            translation,
+        )
+
+        instance = core.HomeAssistant(str(tmp_path))
+        instance.config.skip_pip = True
+        instance.config_entries = config_entries.ConfigEntries(instance, {})
+        loader.async_setup(instance)
+        frame.async_setup(instance)
+        translation.async_setup(instance)
+        dr.async_setup(instance)
+        await dr.async_load(instance)
+        await er.async_load(instance)
+        await ir.async_load(instance)
+        await instance.async_start()
+        yield instance
+        await instance.async_stop(force=True)
+
+    @pytest.fixture
+    def ha_integration():
+        """The integration package exactly as Home Assistant loads it."""
+        import importlib
+
+        return importlib.import_module("custom_components.hisense_tv")

@@ -6,6 +6,7 @@ the platform modules do not duplicate device_info / Wake-on-LAN handling.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import HomeAssistantError
@@ -25,12 +26,16 @@ from .const import (
     DEFAULT_ENABLE_WOL,
     DEFAULT_NAME,
     DOMAIN,
+    KEY_COMMANDS,
     MANUFACTURER,
 )
+from .data import NotConnected
 from .discovery import format_mac
 
 if TYPE_CHECKING:
     from .__init__ import HisenseConfigEntry
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def entry_unique_id(entry: HisenseConfigEntry) -> str:
@@ -38,12 +43,14 @@ def entry_unique_id(entry: HisenseConfigEntry) -> str:
 
     The client UUID is an MQTT handle, not a device identity: re-pairing (reauth)
     generates a fresh one, so keying the registry on it would duplicate the
-    device. MAC/UDN survive re-pairing, so they come first.
+    device. MAC/UDN survive re-pairing, so they come first. MACs are normalized
+    because SSDP reports them both raw (AABBCC...) and formatted.
     """
+    for key in (CONF_MAC_WIFI, CONF_MAC_ETHERNET):
+        if mac := entry.data.get(key):
+            return format_mac(str(mac))
     return str(
-        entry.data.get(CONF_MAC_WIFI)
-        or entry.data.get(CONF_MAC_ETHERNET)
-        or entry.data.get(CONF_UDN)
+        entry.data.get(CONF_UDN)
         or entry.data.get(CONF_UUID)
         or f"{entry.data.get('host')}:{entry.data.get('port', 36669)}"
     )
@@ -132,5 +139,40 @@ class HisenseTvEntity(CoordinatorEntity):
         """Send WOL packets to every configured MAC (works while the TV is off)."""
         for key in (CONF_MAC_WIFI, CONF_MAC_ETHERNET):
             mac = self._entry.data.get(key)
-            if mac:
+            if not mac:
+                continue
+            try:
                 await self._client.wake_on_lan(str(mac))
+            except ValueError as err:
+                # One malformed MAC must not stop the packets for the other.
+                _LOGGER.warning("%s: skipping Wake-on-LAN: %s", self._entry.title, err)
+
+    async def _send_key(self, key: str) -> None:
+        """Send one remote key; a lost connection becomes a translated error."""
+        try:
+            await self._client.send_key(key)
+        except NotConnected as err:
+            raise tv_not_connected_error(err) from err
+
+    def _tv_is_on(self) -> bool:
+        """Connected and not in fake sleep (screen off, broker still up)."""
+        return self._client.connected and self._tv_state.screen_on is not False
+
+    async def async_power_on(self) -> None:
+        """Switch the TV on without ever toggling a running set off.
+
+        KEY_POWER is a toggle, so it is only sent to a connected TV in fake
+        sleep; a TV whose broker is gone can only be reached via WOL.
+        """
+        if self._tv_is_on():
+            return
+        if not self._client.connected:
+            if self._wol_enabled():
+                await self.async_wake_tv()
+            return
+        await self._send_key(KEY_COMMANDS["power"])
+
+    async def async_power_off(self) -> None:
+        """Switch a running TV off; an offline TV is already off."""
+        if self._tv_is_on():
+            await self._send_key(KEY_COMMANDS["power"])

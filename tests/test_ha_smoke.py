@@ -27,7 +27,6 @@ MODULES = [
     "hisense_tv.entity",
     "hisense_tv.coordinator",
     "hisense_tv.config_flow",
-    "hisense_tv.repairs",
     "hisense_tv.button",
     "hisense_tv.media_player",
     "hisense_tv.remote",

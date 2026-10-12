@@ -46,8 +46,6 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# Note: repairs is NOT an entity platform. HA calls the module-level
-# async_create_fix_flow() in repairs.py directly; no forwarding needed.
 PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,
     Platform.REMOTE,
@@ -66,10 +64,17 @@ def bundled_client_cert() -> Path | None:
 def _register_device(hass: HomeAssistant, entry: HisenseConfigEntry) -> None:
     """Create/update the registry device immediately at setup time."""
     registry = dr.async_get(hass)
+    identifier = (DOMAIN, entry_unique_id(entry))
+    # The identity is derived (MAC > UDN > uuid > host), so it changes when a
+    # manually added TV later reveals its MAC. Move the entry's device to the
+    # new identifier instead of letting get_or_create add a second device.
+    devices = dr.async_entries_for_config_entry(registry, entry.entry_id)
+    if len(devices) == 1 and identifier not in devices[0].identifiers:
+        registry.async_update_device(devices[0].id, new_identifiers={identifier})
     data = entry.data
     kwargs: dict = {
         "config_entry_id": entry.entry_id,
-        "identifiers": {(DOMAIN, entry_unique_id(entry))},
+        "identifiers": {identifier},
         "connections": device_connections(entry),
         "manufacturer": MANUFACTURER,
         "model": str(data.get(CONF_MODEL_NAME) or "").strip() or DEFAULT_NAME,
@@ -139,6 +144,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
             )
         elif name == DISPATCH_CONNECTION:
             runtime.state.connected = bool(payload)
+            # Availability and the OFF state follow the connection; without
+            # this the entities would lag until the next poll.
+            changed = True
             if payload:
                 # On every (re)connect ask for capability/appversion. This used
                 # to run once during setup - but since setup now completes
@@ -169,18 +177,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
         elif name == DISPATCH_APP_VERSION and payload:
             runtime.state.app_version = str(payload)
             changed = True
+            _refresh_device_metadata(hass, entry)
         elif name == DISPATCH_PAIRING_REQUIRED:
             # The TV no longer knows us (reset/firmware update): start the
-            # reauth flow so the user can re-pair with a fresh PIN.
+            # reauth flow so the user can re-pair with a fresh PIN. Home
+            # Assistant raises its own repair issue for it and ignores the
+            # request while a reauth flow is already open; the throttle only
+            # keeps a pushing TV from re-opening a flow the user dismissed.
             now = time_monotonic()
             if now - _last_reauth_request > 60:
                 _last_reauth_request = now
                 _LOGGER.info(
                     "%s: TV requests pairing - starting reauth flow", entry.title
                 )
-                from .repairs import async_create_pairing_lost_issue  # noqa: PLC0415
-
-                async_create_pairing_lost_issue(hass, entry)
                 entry.async_start_reauth(hass)
             return
 
@@ -303,8 +312,11 @@ def _refresh_device_metadata(hass: HomeAssistant, entry: HisenseConfigEntry) -> 
 async def async_unload_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> bool:
     """Unload platforms and close the MQTT connection cleanly."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        # Platforms are still loaded and use the client - keep it running.
+        return False
     runtime: RuntimeData | None = getattr(entry, "runtime_data", None)
     if runtime is not None:
         await runtime.client.stop()
         entry.runtime_data = None
-    return unload_ok
+    return True

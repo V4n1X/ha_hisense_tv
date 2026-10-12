@@ -6,12 +6,15 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.remote import RemoteEntity
+from homeassistant.components.remote import (
+    ATTR_DELAY_SECS,
+    ATTR_NUM_REPEATS,
+    RemoteEntity,
+)
 from homeassistant.core import HomeAssistant, callback
 
 from .const import CONF_COMMAND_DELAY, DEFAULT_COMMAND_DELAY, resolve_key
-from .data import NotConnected
-from .entity import HisenseTvEntity, tv_not_connected_error
+from .entity import HisenseTvEntity
 
 if TYPE_CHECKING:
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -55,20 +58,23 @@ class HisenseTvRemote(HisenseTvEntity, RemoteEntity):
         return self._client.connected
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Wake via WOL when enabled, then send the power key."""
-        if self._wol_enabled():
-            await self.async_wake_tv()
-        if self._client.connected:
-            await self.async_send_command(["power"])
+        """Wake via WOL, or the power key for a TV in fake sleep."""
+        await self.async_power_on()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Send the power key to a running TV."""
+        await self.async_power_off()
 
     async def async_send_command(self, commands: list[str], **kwargs: Any) -> None:
         """Send one or more keys.
 
         Accepts friendly names ("power"), aliases ("back") and raw wire keys
         ("KEY_POWER"). Multiple commands may be comma separated inside a
-        single string; ``delay_secs`` paces them like the APK's command queue.
+        single string; ``delay_secs`` paces them like the APK's command queue
+        and ``num_repeats`` sends the whole sequence that many times.
         """
-        delay = float(kwargs.get("delay_secs", 0))
+        delay = float(kwargs.get(ATTR_DELAY_SECS, 0))
+        repeats = max(1, int(kwargs.get(ATTR_NUM_REPEATS, 1)))
         if delay <= 0:
             delay = (
                 int(self._entry.options.get(CONF_COMMAND_DELAY, DEFAULT_COMMAND_DELAY))
@@ -87,12 +93,10 @@ class HisenseTvRemote(HisenseTvEntity, RemoteEntity):
                     continue
                 expanded.append(key)
 
-        for index, key in enumerate(expanded):
-            try:
-                await self._client.send_key(key)
-            except NotConnected as err:
-                raise tv_not_connected_error(err) from err
-            if index < len(expanded) - 1 and delay > 0:
+        sequence = expanded * repeats
+        for index, key in enumerate(sequence):
+            await self._send_key(key)
+            if index < len(sequence) - 1 and delay > 0:
                 await asyncio.sleep(delay)
 
     @callback

@@ -11,7 +11,6 @@
 
 -r requirements_test.txt
 
-voluptuous
 aiomqtt>=2.0.0
 # Lower bound = the minimum HA version declared in hacs.json. It also makes pip
 # fail loudly on an interpreter too old for HA instead of silently picking an
