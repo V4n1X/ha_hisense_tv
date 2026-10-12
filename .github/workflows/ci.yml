@@ -83,9 +83,12 @@ jobs:
       - name: Install Home Assistant (cached wheels)
         run: pip install -r requirements_ci.txt
 
-      - name: Run full-import smoke test against real Home Assistant
+      # test_ha_*.py: import smoke test plus config flow, entity and entry
+      # setup tests driven through a real (minimal) Home Assistant core. They
+      # skip themselves in the stub-mode step above.
+      - name: Run tests against real Home Assistant
         run: >-
-          python -m pytest tests/test_ha_smoke.py -v --tb=short
+          python -m pytest tests/test_ha_*.py -v --tb=short
           --deselect tests/test_ha_smoke.py::test_setup_triggers_no_ha_deprecation_warnings
 
       # Fails when HA itself reports deprecated API usage (e.g. new device
