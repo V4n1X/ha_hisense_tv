@@ -1,16 +1,16 @@
-<div align="center">
-  <img src="https://raw.githubusercontent.com/home-assistant/brands/master/custom_integrations/hisense_tv/logo.png" alt="Hisense" width="220"/>
-  <h1>Hisense TV for Home Assistant</h1>
-  <p><b>Local control for Hisense VIDAA TVs — no cloud, no extra hardware.</b></p>
-  <p><a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS"/></a>
-  <a href="https://github.com/V4n1X/ha_hisense_tv/releases/latest"><img src="https://img.shields.io/github/v/release/V4n1X/ha_hisense_tv?include_prereleases" alt="Release"/></a>
-  <a href="https://github.com/V4n1X/ha_hisense_tv/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/V4n1X/ha_hisense_tv/ci.yml?branch=main" alt="CI"/></a></p>
-</div>
+![Hisense TV for Home Assistant](https://raw.githubusercontent.com/home-assistant/brands/master/custom_integrations/hisense_tv/logo.png)
+
+# Hisense TV for Home Assistant
+
+**Local control for Hisense VIDAA TVs — no cloud, no extra hardware.**
+
+[![HACS: Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz)
+[![Latest release](https://img.shields.io/github/v/release/V4n1X/ha_hisense_tv?include_prereleases)](https://github.com/V4n1X/ha_hisense_tv/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/V4n1X/ha_hisense_tv/ci.yml?branch=main)](https://github.com/V4n1X/ha_hisense_tv/actions/workflows/ci.yml)
 
 Custom integration that controls Hisense VIDAA TVs via the **MQTT broker embedded in the TV**, using the reverse-engineered protocol of the official **Hisense RemoteNOW** app (`com.universal.remote.ms` 5.01.011).
 
-> [!IMPORTANT]
-> **Migrating?** This integration is a standalone replacement for `sehaas/ha_hisense_tv` and uses the same domain `hisense_tv`. Uninstall any existing `hisense_tv` integration before installing.
+> **⚠️ Important — migrating?** This integration is a standalone replacement for `sehaas/ha_hisense_tv` and uses the same domain `hisense_tv`. Uninstall any existing `hisense_tv` integration before installing.
 
 ## ✨ Features
 
@@ -42,8 +42,7 @@ Tested against the protocol generation of RemoteNOW 5.x (VIDAA / Vidaa-U TVs, st
 - Home Assistant ≥ **2026.9** with [HACS](https://hacs.xyz) installed
 - TV and Home Assistant on the **same network**, TV powered **on during setup**
 
-> [!TIP]
-> Enable *Network Standby / Quick Start* on the TV so automations can power it on later.
+> **💡 Tip:** Enable *Network Standby / Quick Start* on the TV so automations can power it on later.
 
 ### 1️⃣ Download via HACS
 
@@ -51,14 +50,11 @@ Tested against the protocol generation of RemoteNOW 5.x (VIDAA / Vidaa-U TVs, st
 
 Click the button, confirm that HACS adds the repository, then click **Download**. Restart Home Assistant afterwards (*Settings → System → Restart*).
 
-<details>
-<summary>Without the button</summary>
+#### Without the button
 
 1. Open **HACS** → **⋮** (top right) → **Custom repositories**.
 2. Enter `https://github.com/V4n1X/ha_hisense_tv` with category **Integration** and confirm.
 3. Open **Hisense TV** in HACS and click **Download**, then restart Home Assistant.
-
-</details>
 
 ### 2️⃣ Add the integration
 
@@ -73,15 +69,13 @@ Click the button or go to *Settings → Devices & Services → Add Integration* 
 
 If the TV shows a **4-digit pairing code**, the *"Pair with your TV"* dialog opens in Home Assistant — enter the code there. The code is only valid for about 30 seconds; if it expires, wait for the TV to show a new one and try again. If no PIN dialog appears, the firmware needs no pairing and the setup simply finishes.
 
-> [!WARNING]
-> **Close the official RemoteNOW/VIDAA app first.** The TV allows only one active remote session — while the phone app is connected, the TV shows no pairing code.
+> **⚠️ Warning:** **Close the official RemoteNOW/VIDAA app first.** The TV allows only one active remote session — while the phone app is connected, the TV shows no pairing code.
 
 🎉 Done — the device is registered with manufacturer, model, firmware and MAC, and all entities are available immediately.
 
 > 📖 Full guide with TV settings, quick tests and more troubleshooting: [`docs/INSTALLATION.md`](docs/INSTALLATION.md)
 
-<details>
-<summary>Manual installation (without HACS)</summary>
+#### Manual installation (without HACS)
 
 ```bash
 git clone https://github.com/V4n1X/ha_hisense_tv /tmp/ha_hisense_tv
@@ -91,8 +85,6 @@ rm -rf /tmp/ha_hisense_tv
 ```
 
 Then restart Home Assistant and continue with step 2.
-
-</details>
 
 ## 🔧 Configuration
 

@@ -23,6 +23,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Labels as the options-flow multi-select shows them.
 LABELS = {desc.label for desc in BUTTON_DESCRIPTIONS}
+
+# The HACS repository page renders the README with the Home Assistant markdown
+# renderer, which passes only a small set of inline HTML through. Everything
+# else (div, details/summary, b, picture, source, svg, video, iframe, style,
+# script, align/class/style attributes) ends up as raw text on that page.
+RENDERER_SAFE_TAGS = {"a", "br", "h1", "h2", "h3", "h4", "h5", "h6", "img", "p"}
+RENDERER_SAFE_ATTRIBUTES = {"alt", "href", "src", "title"}
 LABEL_BY_KEY = {desc.key: desc.label for desc in BUTTON_DESCRIPTIONS}
 
 
@@ -93,6 +100,34 @@ def test_documented_button_count_matches_the_code() -> None:
             f"{name} says {found.group(1)} selectable buttons, "
             f"button.py defines {total}"
         )
+
+
+def _without_code(text: str) -> str:
+    """Return markdown text with fenced blocks and inline code removed.
+
+    Angle brackets inside code are literal text on the rendered page, not HTML,
+    so only the remaining text may be checked for unsupported tags.
+    """
+    text = re.sub(r"^```.*?^```", "", text, flags=re.DOTALL | re.MULTILINE)
+    return re.sub(r"`[^`\n]*`", "", text)
+
+
+def test_readme_uses_only_renderer_safe_html() -> None:
+    """The README keeps to the HTML the HACS/HA markdown renderer supports."""
+    for raw in re.findall(r"<[^<>]+>", _without_code(_read("README.md"))):
+        tag = re.match(r"<\s*/?\s*([a-zA-Z][a-zA-Z0-9]*)", raw)
+        assert tag, f"README.md: unparseable tag {raw!r}"
+        name = tag.group(1).lower()
+        assert name in RENDERER_SAFE_TAGS, (
+            f"README.md uses <{name}>, which the HACS markdown renderer shows "
+            f"as raw text; allowed tags: {sorted(RENDERER_SAFE_TAGS)}"
+        )
+        for attribute in re.findall(r"\s([a-zA-Z-]+)\s*=", raw):
+            assert attribute.lower() in RENDERER_SAFE_ATTRIBUTES, (
+                f"README.md sets {attribute}= on <{name}>, which the HACS "
+                f"markdown renderer does not support; allowed attributes: "
+                f"{sorted(RENDERER_SAFE_ATTRIBUTES)}"
+            )
 
 
 def test_manifest_version_matches_release_notes() -> None:
