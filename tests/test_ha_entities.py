@@ -113,6 +113,49 @@ async def test_turn_on_wakes_a_fake_sleeping_tv_with_the_power_key():
     assert client.keys == ["KEY_POWER"]
 
 
+@pytest.mark.parametrize(
+    ("connected", "screen_on", "expected"),
+    [
+        pytest.param(False, None, "off", id="broker-gone"),
+        pytest.param(True, False, "off", id="fake-sleep"),
+        pytest.param(True, None, "on", id="screen-unknown"),
+        pytest.param(True, True, "on", id="screen-on"),
+    ],
+)
+async def test_power_state_treats_fake_sleep_as_off(connected, screen_on, expected):
+    """Media player and remote report OFF while the TV only keeps its broker up."""
+    player, client, state = _player()
+    entity = remote.HisenseTvRemote(player._entry)  # noqa: SLF001
+    client.connected = connected
+    state.screen_on = screen_on
+
+    assert player.state == expected
+    assert entity.is_on is (expected == "on")
+
+
+async def test_tvsleep_reports_off_while_the_broker_lingers():
+    """After tvsleep the TV is OFF although the connection is still up."""
+    player, client, state = _player()
+    entity = remote.HisenseTvRemote(player._entry)  # noqa: SLF001
+    client.connected = True
+    state.apply_sleep()
+
+    assert player.state == "off"
+    assert entity.is_on is False
+
+
+async def test_turn_on_a_tv_shutting_down_uses_wake_on_lan():
+    """A TV that sent tvsleep ignores keys; WOL is the way back."""
+    player, client, state = _player()
+    client.connected = True
+    state.apply_sleep()
+
+    await player.async_turn_on()
+
+    assert client.woken == [WIFI_MAC]
+    assert client.keys == []
+
+
 async def test_turn_on_uses_wake_on_lan_while_disconnected():
     """An unreachable TV is woken via WOL; no key can be sent."""
     player, client, _state = _player()

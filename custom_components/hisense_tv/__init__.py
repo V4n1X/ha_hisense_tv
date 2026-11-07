@@ -32,6 +32,7 @@ from .const import (
     DISPATCH_PAIRING_REQUIRED,
     DISPATCH_SOURCES,
     DISPATCH_STATE,
+    DISPATCH_TV_SLEEP,
     DISPATCH_VOLUME,
     DOMAIN,
     MANUFACTURER,
@@ -122,6 +123,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
                 changed,
                 payload.statetype,
             )
+        elif name == DISPATCH_TV_SLEEP:
+            # The broker keeps the connection for about a minute after the
+            # TV was switched off; this broadcast is the immediate signal.
+            changed = runtime.state.apply_sleep()
+            _LOGGER.debug("%s: TV switched off (tvsleep)", entry.title)
         elif name == DISPATCH_VOLUME:
             changed = runtime.state.apply_volume(payload)
             _LOGGER.debug(
@@ -143,7 +149,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
                 "%s: app list updated (%d entries)", entry.title, len(payload)
             )
         elif name == DISPATCH_CONNECTION:
-            runtime.state.connected = bool(payload)
+            runtime.state.set_connected(bool(payload))
             # Availability and the OFF state follow the connection; without
             # this the entities would lag until the next poll.
             changed = True

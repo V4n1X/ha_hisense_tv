@@ -17,11 +17,17 @@ MANUFACTURER = "Hisense"
 DEFAULT_PORT = 36669
 DEFAULT_NAME = "Hisense TV"
 CONNECT_TIMEOUT = 5.0
-KEEPALIVE = 45
+# The app uses 45 s. A TV that is switched off drops off the network without
+# closing the socket, so the only OFF signal is a missed PINGRESP: paho pings
+# after one silent keepalive interval and gives up after another one. 45 s
+# kept the media player ON for up to 90 s; 10 s detects it within 20 s.
+KEEPALIVE = 10
 PROBE_TIMEOUT = 6.0
 PAIRING_TIMEOUT = 12.0
 RECONNECT_MIN = 2.0
-RECONNECT_MAX = 60.0
+# Also bounds how long a TV switched on with its own remote stays OFF in HA.
+# An attempt against a powered-off TV fails fast (host unreachable).
+RECONNECT_MAX = 10.0
 
 # Shared RemoteNOW MQTT credentials (ConfigureUtils c()/d(), double base64).
 MQTT_USERNAME = "hisenseservice"
@@ -89,6 +95,9 @@ TOPIC_FUNC_AUTH_TOAST = "authenticationcodetoast"
 TOPIC_FUNC_AUTH_CLOSE = "authenticationcodeclose"
 TOPIC_FUNC_CAPABILITY = "capability"
 TOPIC_FUNC_APP_VERSION = "appversion"
+# Broadcast by the TV the moment it is switched off; the broker lingers for
+# about a minute afterwards without answering any request.
+TOPIC_FUNC_TV_SLEEP = "tvsleep"
 
 # Internal dispatch event names (what callbacks/waiters see).
 DISPATCH_CONNECTION = "connection"
@@ -99,6 +108,7 @@ DISPATCH_APPS = "app_list"
 DISPATCH_PAIRING_REQUIRED = "pairing_required"
 DISPATCH_AUTH_RESULT = "authentication_result"
 DISPATCH_AUTH_TOAST = "authentication_toast"
+DISPATCH_TV_SLEEP = "tv_sleep"
 
 # Event sets the config flow waits on. Kept next to the dispatcher names so
 # tests can assert they always match (regression guard: the pairing step once

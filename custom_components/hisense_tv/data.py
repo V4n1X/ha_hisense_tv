@@ -21,6 +21,11 @@ import ssl
 from typing import Any
 import uuid
 
+# Imported with the module, which Home Assistant does in an executor thread:
+# aiomqtt reads package metadata from disk on import, so a lazy import in
+# _connect_once was reported as a blocking call inside the event loop.
+import aiomqtt
+
 from .const import (
     ACTION_APP_LIST,
     ACTION_APP_VERSION,
@@ -46,6 +51,7 @@ from .const import (
     DISPATCH_PAIRING_REQUIRED,
     DISPATCH_SOURCES,
     DISPATCH_STATE,
+    DISPATCH_TV_SLEEP,
     DISPATCH_VOLUME,
     KEEPALIVE,
     MQTT_PASSWORD,
@@ -66,6 +72,7 @@ from .const import (
     TOPIC_FUNC_PAIRING_REQUIRED,
     TOPIC_FUNC_SOURCE_LIST,
     TOPIC_FUNC_STATE,
+    TOPIC_FUNC_TV_SLEEP,
     TOPIC_FUNC_VOLUMES,
     subscribe_own,
     tv_action,
@@ -136,6 +143,9 @@ class HisenseTvClient:
         self._client: Any = None
         self._task: asyncio.Task[None] | None = None
         self._stopping = False
+        # Set by wake_on_lan: cuts the reconnect backoff short, so a TV that
+        # was offline for a while is picked up as soon as its broker boots.
+        self._retry_now = asyncio.Event()
         # Bounded ring of (sequence, name, data). Waiters remember a sequence
         # number, not a ring index: once the ring is full every index stays
         # below its length, so an index marker would never match again.
@@ -203,8 +213,6 @@ class HisenseTvClient:
         return ctx
 
     async def _connect_once(self) -> None:
-        import aiomqtt  # noqa: PLC0415 - optional dependency
-
         attempts: list[bool] = [False] if self.use_tls is not True else [True]
         if self.use_tls is None:
             attempts.append(True)
@@ -213,15 +221,6 @@ class HisenseTvClient:
         for tls in attempts:
             uri_host = self.host
             try:
-                # The TV broker speaks MQTT 3.1 (MQIsdp); a 3.1.1 CONNECT is
-                # answered with CONNACK "not authorized" on current firmware.
-                protocol = None
-                try:
-                    from aiomqtt import ProtocolVersion  # noqa: PLC0415
-
-                    protocol = ProtocolVersion.V31
-                except ImportError:
-                    pass
                 tls_context = await self._build_ssl_context() if tls else None
                 client = aiomqtt.Client(
                     hostname=uri_host,
@@ -230,7 +229,9 @@ class HisenseTvClient:
                     username=MQTT_USERNAME,
                     password=MQTT_PASSWORD,
                     tls_context=tls_context,
-                    protocol=protocol,
+                    # The TV broker speaks MQTT 3.1 (MQIsdp); a 3.1.1 CONNECT is
+                    # answered with CONNACK "not authorized" on current firmware.
+                    protocol=aiomqtt.ProtocolVersion.V31,
                     keepalive=KEEPALIVE,
                 )
                 await self._open_client(client, CONNECT_TIMEOUT)
@@ -316,8 +317,14 @@ class HisenseTvClient:
                 if self.connected:
                     await self._disconnect()
                 _LOGGER.debug("Connection lost (%s), retrying in %.0fs", err, backoff)
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, RECONNECT_MAX)
+                with contextlib.suppress(TimeoutError):
+                    async with asyncio.timeout(backoff):
+                        await self._retry_now.wait()
+                if self._retry_now.is_set():
+                    self._retry_now.clear()
+                    backoff = RECONNECT_MIN
+                else:
+                    backoff = min(backoff * 2, RECONNECT_MAX)
 
     # -- messaging ---------------------------------------------------------
 
@@ -383,6 +390,8 @@ class HisenseTvClient:
             self._emit(DISPATCH_AUTH_TOAST, text)
         elif function == TOPIC_FUNC_AUTH_CLOSE:
             _LOGGER.debug("TV closed the pairing dialog")
+        elif function == TOPIC_FUNC_TV_SLEEP:
+            self._emit(DISPATCH_TV_SLEEP, None)
         elif function == TOPIC_FUNC_CAPABILITY:
             self._emit(DISPATCH_CAPABILITY, CapabilityInfo.parse(text))
         elif function == TOPIC_FUNC_APP_VERSION:
@@ -466,8 +475,9 @@ class HisenseTvClient:
         return await self._publish(SERVICE_UI, ACTION_AUTHENTICATION_CODE_CLOSE, "")
 
     async def wake_on_lan(self, mac: str) -> None:
-        """Send a WOL magic packet to the given MAC."""
+        """Send a WOL magic packet to the given MAC, then retry connecting."""
         await async_send_wol(mac)
+        self._retry_now.set()
 
 
 async def wait_for_event(

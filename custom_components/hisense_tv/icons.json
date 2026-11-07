@@ -1,0 +1,89 @@
+{
+  "entity": {
+    "button": {
+      "button_back": {
+        "default": "mdi:keyboard-backspace"
+      },
+      "button_channel_down": {
+        "default": "mdi:arrow-down-bold-box-outline"
+      },
+      "button_channel_up": {
+        "default": "mdi:arrow-up-bold-box-outline"
+      },
+      "button_disney": {
+        "default": "mdi:castle"
+      },
+      "button_down": {
+        "default": "mdi:arrow-down"
+      },
+      "button_guide": {
+        "default": "mdi:television-guide"
+      },
+      "button_home": {
+        "default": "mdi:home"
+      },
+      "button_info": {
+        "default": "mdi:information-outline"
+      },
+      "button_left": {
+        "default": "mdi:arrow-left"
+      },
+      "button_menu": {
+        "default": "mdi:menu"
+      },
+      "button_mute": {
+        "default": "mdi:volume-mute"
+      },
+      "button_netflix": {
+        "default": "mdi:netflix"
+      },
+      "button_ok": {
+        "default": "mdi:checkbox-blank-circle-outline"
+      },
+      "button_plex": {
+        "default": "mdi:plex"
+      },
+      "button_prime_video": {
+        "default": "mdi:amazon"
+      },
+      "button_right": {
+        "default": "mdi:arrow-right"
+      },
+      "button_settings": {
+        "default": "mdi:cog"
+      },
+      "button_source": {
+        "default": "mdi:video-input-hdmi"
+      },
+      "button_up": {
+        "default": "mdi:arrow-up"
+      },
+      "button_volume_down": {
+        "default": "mdi:volume-low"
+      },
+      "button_volume_up": {
+        "default": "mdi:volume-high"
+      },
+      "button_youtube": {
+        "default": "mdi:youtube"
+      }
+    },
+    "sensor": {
+      "source": {
+        "default": "mdi:video-input-hdmi"
+      },
+      "tv_state": {
+        "default": "mdi:information-outline"
+      },
+      "volume": {
+        "default": "mdi:volume-high",
+        "range": {
+          "0": "mdi:volume-mute",
+          "1": "mdi:volume-low",
+          "34": "mdi:volume-medium",
+          "67": "mdi:volume-high"
+        }
+      }
+    }
+  }
+}

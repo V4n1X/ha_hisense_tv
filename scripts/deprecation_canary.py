@@ -141,8 +141,11 @@ async def main(config_dir: str) -> int:
     if hasattr(dr, "async_setup"):
         dr.async_setup(hass)
 
+    # Since 2026.11 the entity registry load waits for the config entries to
+    # be initialized, as bootstrap does concurrently.
     await asyncio.gather(
         hass.async_add_executor_job(_prime_blocking_modules),
+        hass.config_entries.async_initialize(),
         dr.async_load(hass),
         er.async_load(hass),
         ir.async_load(hass),

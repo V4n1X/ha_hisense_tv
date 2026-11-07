@@ -64,11 +64,6 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
         self._source_requested_at: float | None = None
 
     @property
-    def should_poll(self) -> bool:
-        """Push-only: coordinator listeners wake the entity."""
-        return False
-
-    @property
     def available(self) -> bool:
         """Keep available so WOL can power the TV on while disconnected."""
         return True
@@ -76,10 +71,10 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
     @property
     def state(self) -> MediaPlayerState:
         """Map connection/screen/tv_state onto HA media player states."""
-        if not self._client.connected:
+        # Fake sleep (screen off, broker still up) is OFF to the user, and
+        # turn_on wakes it with the power key.
+        if not self._tv_is_on():
             return MediaPlayerState.OFF
-        if self._tv_state.screen_on is False:
-            return MediaPlayerState.ON
         tv_state = self._tv_state.tv_state or ""
         if tv_state in ("mediadmp", "mediadlna", "livetv"):
             return MediaPlayerState.PLAYING
@@ -214,4 +209,9 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
         ):
             return
         self._source_requested_at = now
-        self.hass.async_create_task(self._async_request_source_list())
+        # Tied to the entry, so an unload cancels a request still in flight.
+        self._entry.async_create_background_task(
+            self.hass,
+            self._async_request_source_list(),
+            "hisense_tv_source_list_request",
+        )

@@ -59,6 +59,7 @@ async def async_get_config_entry_diagnostics(
                 "source_list_size": len(state.source_list),
                 "tv_state": state.tv_state,
                 "screen_on": state.screen_on,
+                "going_to_sleep": state.going_to_sleep,
                 "app_version": state.app_version,
             }
             if state is not None

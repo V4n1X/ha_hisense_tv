@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from hisense_tv.button import BUTTON_DESCRIPTIONS, selected_button_descriptions
 from hisense_tv.const import CONF_BUTTONS, DEFAULT_BUTTONS, KEY_COMMANDS
 
@@ -11,6 +14,18 @@ def test_button_descriptions_match_valid_keys():
     for desc in BUTTON_DESCRIPTIONS:
         assert desc.key_command.startswith("KEY_")
         assert desc.key_command in KEY_COMMANDS.values()
+
+
+def test_every_entity_has_an_icon_translation():
+    """icons.json covers exactly the button and sensor translation keys."""
+    integration = Path(__file__).parents[1] / "custom_components" / "hisense_tv"
+    icons = json.loads((integration / "icons.json").read_text(encoding="utf-8"))
+    strings = json.loads((integration / "strings.json").read_text(encoding="utf-8"))
+
+    assert set(icons["entity"]["button"]) == {
+        desc.translation_key for desc in BUTTON_DESCRIPTIONS
+    }
+    assert set(icons["entity"]["sensor"]) == set(strings["entity"]["sensor"])
 
 
 def test_no_duplicate_power_or_wol_buttons():

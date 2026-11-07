@@ -11,7 +11,7 @@ from homeassistant.components.remote import (
     ATTR_NUM_REPEATS,
     RemoteEntity,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 
 from .const import CONF_COMMAND_DELAY, DEFAULT_COMMAND_DELAY, resolve_key
 from .entity import HisenseTvEntity
@@ -43,19 +43,14 @@ class HisenseTvRemote(HisenseTvEntity, RemoteEntity):
         super().__init__(entry, "remote")
 
     @property
-    def should_poll(self) -> bool:
-        """Push-only: coordinator listeners wake the entity."""
-        return False
-
-    @property
     def available(self) -> bool:
         """Keep available so WOL can power the TV on while disconnected."""
         return True
 
     @property
     def is_on(self) -> bool | None:
-        """The remote is "on" when the MQTT connection is up."""
-        return self._client.connected
+        """Same power state as the media player (fake sleep counts as off)."""
+        return self._tv_is_on()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Wake via WOL, or the power key for a TV in fake sleep."""
@@ -98,7 +93,3 @@ class HisenseTvRemote(HisenseTvEntity, RemoteEntity):
             await self._send_key(key)
             if index < len(sequence) - 1 and delay > 0:
                 await asyncio.sleep(delay)
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        self.async_write_ha_state()

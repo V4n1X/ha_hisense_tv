@@ -16,7 +16,7 @@ and [sehaas/ha_hisense_tv](https://github.com/sehaas/ha_hisense_tv).
 | Username | `hisenseservice` (`ConfigureUtils.c()`, double base64 `YUdselpXNXpaWE5sY25acFkyVT0=`) |
 | Password | `multimqttservice` (`ConfigureUtils.d()`, double base64 `YlhWc2RHbHRjWFIwYzJWeWRtbGpaUT09`) |
 | Client ID | `<phone MAC>$normal` (+ `e` suffix for OEM builds). Any unique string works; it must be identical in CONNECT and topics |
-| Options | clean session false, keepalive 45 s, connect timeout 5 s, max inflight 100, LWT `/mobile/<uuid>` (empty, retained) |
+| Options | clean session false, keepalive 45 s, connect timeout 5 s, max inflight 100, LWT `/mobile/<uuid>` (empty, retained). This integration uses keepalive 10 s: a TV switched off does not close the socket, so the missed PINGRESP is the only power-off signal (detected within 2 × keepalive) |
 
 ## 2. Topics
 
@@ -71,6 +71,7 @@ Topic segments when split by `/`: `[3]`=clientId-or-broadcast, `[4]`=service,
 | `/authenticationcodeclose` | – | pairing dialog dismissed; also pushed by the TV itself after the code expires (~30 s) |
 | `/capability` | CapabilityTvInfo | brand, deviceid, featurecode, capability, tuner_num, fake_sleep(+state), audio/screen_capture_supported |
 | `/appversion` | version string | firmware/app enrichment |
+| `/tvsleep` | empty | broadcast on `platform_service/actions/tvsleep` the moment the TV is switched off. Verified live (2026-11, MSD6886): afterwards the TV answers no request, and the broker connection dies about a minute later |
 
 ## 5. First pairing sequence (= RemoteNOW behaviour)
 

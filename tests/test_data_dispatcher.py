@@ -1,6 +1,11 @@
 """Tests for the MQTT feedback dispatcher (no broker required)."""
 
-from hisense_tv.data import HisenseTvClient
+import asyncio
+
+import pytest
+
+from hisense_tv import data as data_mod
+from hisense_tv.data import CannotConnect, HisenseTvClient
 from hisense_tv.models import AuthenResult, StateUpdate, VolumeUpdate
 
 CID = "ha-hisense-test1234"
@@ -78,6 +83,15 @@ def test_auth_toast_is_not_a_success_signal():
     assert not isinstance(payload, AuthenResult)
 
 
+def test_tvsleep_broadcast_dispatches_tv_sleep():
+    """The power-off broadcast (verified live, empty payload) is dispatched."""
+    client, events = make_client()
+    client._handle_message(
+        "/remoteapp/mobile/broadcast/platform_service/actions/tvsleep", b""
+    )
+    assert events == [("tv_sleep", None)]
+
+
 def test_foreign_client_ids_are_ignored():
     """Messages addressed to other clients produce no events."""
     client, events = make_client()
@@ -149,3 +163,38 @@ def test_auth_toast_uses_dedicated_dispatch_name():
     names = [name for name, _ in events]
     assert "authentication_result" not in names
     assert names == ["authentication_toast"]
+
+
+@pytest.mark.asyncio
+async def test_wake_on_lan_cuts_the_reconnect_backoff_short(monkeypatch):
+    """After WOL the client retries at once instead of sleeping out the backoff."""
+    client, _events = make_client()
+    attempts: list[None] = []
+
+    async def offline() -> None:
+        attempts.append(None)
+        raise CannotConnect("offline")
+
+    async def no_packet(_mac: str) -> None:
+        return None
+
+    monkeypatch.setattr(client, "_connect_once", offline)
+    monkeypatch.setattr(data_mod, "async_send_wol", no_packet)
+    monkeypatch.setattr(data_mod, "RECONNECT_MIN", 60.0)
+
+    async def attempts_reach(count: int) -> None:
+        while len(attempts) < count:
+            await asyncio.sleep(0)
+
+    task = asyncio.create_task(client._run_forever())
+    try:
+        async with asyncio.timeout(1):
+            await attempts_reach(1)
+        await client.wake_on_lan("AA:BB:CC:DD:EE:FF")
+        async with asyncio.timeout(1):
+            await attempts_reach(2)
+    finally:
+        client._stopping = True
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task

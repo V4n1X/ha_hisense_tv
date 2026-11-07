@@ -6,14 +6,14 @@ import logging
 from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .entity import HisenseTvEntity
 
 if TYPE_CHECKING:
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
     from .__init__ import HisenseConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,7 +52,6 @@ class HisenseVolumeSensor(_HisenseSensorBase):
     """Current volume level as reported by the TV (0-100 %)."""
 
     _attr_translation_key = "volume"
-    _attr_icon = "mdi:volume-high"
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -70,7 +69,6 @@ class HisenseSourceSensor(_HisenseSensorBase):
     """Currently selected source/input."""
 
     _attr_translation_key = "source"
-    _attr_icon = "mdi:video-input-hdmi"
 
     def __init__(self, entry: HisenseConfigEntry) -> None:
         """Create the source sensor."""
@@ -89,7 +87,6 @@ class HisenseStateSensor(_HisenseSensorBase):
     """Raw statetype pushed by the TV (sourceswitch, app, livetv, ...)."""
 
     _attr_translation_key = "tv_state"
-    _attr_icon = "mdi:information-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, entry: HisenseConfigEntry) -> None:

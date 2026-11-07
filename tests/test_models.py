@@ -92,3 +92,41 @@ def test_tv_state_transitions():
     assert state.screen_on is False
     # Dedupe: same values again -> no change
     assert state.apply_volume(VolumeUpdate(level=30)) is False
+
+
+def test_tvsleep_marks_the_tv_off_until_it_answers_again():
+    """The tvsleep flag is set once; any later feedback means the TV woke up."""
+    state = TvState()
+    state.set_connected(True)
+
+    assert state.apply_sleep() is True
+    assert state.apply_sleep() is False
+    assert state.going_to_sleep is True
+
+    assert state.apply_volume(VolumeUpdate()) is False  # empty: no proof of life
+    assert state.going_to_sleep is True
+    assert state.apply_volume(VolumeUpdate(level=state.volume_level or 0)) is True
+    assert state.going_to_sleep is False
+
+
+def test_reconnect_clears_the_sleep_flag():
+    """A new broker session belongs to a freshly booted TV."""
+    state = TvState()
+    state.set_connected(True)
+    state.apply_sleep()
+
+    state.set_connected(False)
+
+    assert state.going_to_sleep is False
+
+
+def test_lost_connection_forgets_fake_sleep():
+    """A TV whose broker went away boots with the screen on, not in fake sleep."""
+    state = TvState()
+    state.set_connected(True)
+    state.apply_state(StateUpdate.parse('{"statetype":"fake_sleep_0"}'))
+
+    state.set_connected(False)
+
+    assert state.connected is False
+    assert state.screen_on is None

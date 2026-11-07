@@ -162,6 +162,9 @@ def _install_stubs() -> None:
         def __init__(self, coordinator: type) -> None:
             self.coordinator = coordinator
 
+        def __class_getitem__(cls, _item: object) -> type:  # Generic[T] support
+            return cls
+
         available = True
 
         def async_write_ha_state(self) -> None:
@@ -281,6 +284,9 @@ if HAS_REAL_HA:
         frame.async_setup(instance)
         translation.async_setup(instance)
         dr.async_setup(instance)
+        # Since 2026.11 the entity registry load waits for the config entries
+        # to be initialized.
+        await instance.config_entries.async_initialize()
         await dr.async_load(instance)
         await er.async_load(instance)
         await ir.async_load(instance)

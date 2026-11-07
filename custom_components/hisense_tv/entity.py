@@ -29,6 +29,7 @@ from .const import (
     KEY_COMMANDS,
     MANUFACTURER,
 )
+from .coordinator import HisenseTvCoordinator
 from .data import NotConnected
 from .discovery import format_mac
 
@@ -104,7 +105,7 @@ def tv_not_connected_error(err: Exception) -> HomeAssistantError:
     )
 
 
-class HisenseTvEntity(CoordinatorEntity):
+class HisenseTvEntity(CoordinatorEntity[HisenseTvCoordinator]):
     """Common base: shared device info, client access and WOL helpers."""
 
     _attr_has_entity_name = True
@@ -155,18 +156,25 @@ class HisenseTvEntity(CoordinatorEntity):
             raise tv_not_connected_error(err) from err
 
     def _tv_is_on(self) -> bool:
-        """Connected and not in fake sleep (screen off, broker still up)."""
-        return self._client.connected and self._tv_state.screen_on is not False
+        """Connected, not shutting down and not in fake sleep (screen off)."""
+        return (
+            self._client.connected
+            and not self._tv_state.going_to_sleep
+            and self._tv_state.screen_on is not False
+        )
 
     async def async_power_on(self) -> None:
         """Switch the TV on without ever toggling a running set off.
 
         KEY_POWER is a toggle, so it is only sent to a connected TV in fake
-        sleep; a TV whose broker is gone can only be reached via WOL.
+        sleep. A TV whose broker is gone, or that is shutting down and no
+        longer answers, can only be reached via WOL.
         """
         if self._tv_is_on():
             return
-        if not self._client.connected:
+        if not self._client.connected or (
+            self._tv_state.going_to_sleep and self._wol_enabled()
+        ):
             if self._wol_enabled():
                 await self.async_wake_tv()
             return

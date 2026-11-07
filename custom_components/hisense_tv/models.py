@@ -254,10 +254,41 @@ class TvState:
     screen_on: bool | None = None
     capability: CapabilityInfo | None = None
     app_version: str | None = None
+    # Set by the tvsleep broadcast: the TV is shutting down while its broker
+    # still holds the connection for about a minute.
+    going_to_sleep: bool = False
+
+    def set_connected(self, connected: bool) -> None:
+        """Track the broker connection; a lost one forgets the sleep flags.
+
+        A TV whose broker went away was really powered off, and it boots
+        with the screen on. A stale ``screen_on=False`` would otherwise keep
+        reporting OFF after the reconnect.
+        """
+        self.connected = connected
+        self.going_to_sleep = False
+        if not connected:
+            self.screen_on = None
+
+    def apply_sleep(self) -> bool:
+        """Mark the TV as switched off; True when that is news."""
+        if self.going_to_sleep:
+            return False
+        self.going_to_sleep = True
+        return True
+
+    def _wake(self) -> bool:
+        """Feedback after tvsleep means the TV was switched on again in time."""
+        if not self.going_to_sleep:
+            return False
+        self.going_to_sleep = False
+        return True
 
     def apply_volume(self, update: VolumeUpdate) -> bool:
         """Apply a volume update; True when any stored value changed."""
         changed = False
+        if update.level is not None or update.muted is not None:
+            changed = self._wake()
         if update.level is not None and update.level != self.volume_level:
             self.volume_level = update.level
             changed = True
@@ -270,6 +301,7 @@ class TvState:
         """Apply a state update (also drives screen_on via fake_sleep states)."""
         changed = False
         if update.statetype:
+            changed = self._wake()
             if update.statetype != self.tv_state:
                 self.tv_state = update.statetype
                 changed = True
