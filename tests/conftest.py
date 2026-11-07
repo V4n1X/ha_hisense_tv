@@ -171,6 +171,11 @@ def _install_stubs() -> None:
             return None
 
     _register(
+        "homeassistant.helpers.aiohttp_client",
+        async_get_clientsession=lambda _hass: None,
+    )
+
+    _register(
         "homeassistant.helpers.update_coordinator",
         DataUpdateCoordinator=_DataUpdateCoordinator,
         CoordinatorEntity=_CoordinatorEntity,

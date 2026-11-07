@@ -122,6 +122,29 @@ async def test_connection_loss_updates_entities_immediately(hass, setup_env):
     assert entry.runtime_data.state.connected is False
 
 
+async def test_mute_state_comes_from_the_dlna_renderer(hass, setup_env):
+    """MQTT never reports mute; the renderer's GetMute answer is published."""
+    entry, client = await _setup(hass, {"mac_wifi": WIFI_MAC})
+    coordinator = entry.runtime_data.coordinator
+    calls: list[None] = []
+    coordinator.async_add_listener(lambda: calls.append(None))
+    answers = [True, True, None]
+
+    class FakeRenderer:
+        async def async_get_mute(self) -> bool | None:
+            return answers.pop(0)
+
+    coordinator._rendering_control = FakeRenderer()  # noqa: SLF001
+    client.connected = True
+
+    await coordinator.async_refresh_mute()
+    await coordinator.async_refresh_mute()  # unchanged: no extra update
+    await coordinator.async_refresh_mute()  # renderer unreachable: keep state
+
+    assert entry.runtime_data.state.muted is True
+    assert calls == [None]
+
+
 async def test_pairing_lost_starts_a_single_reauth_flow(hass, setup_env):
     """The TV forgetting us starts one reauth flow with HA's own repair issue."""
     entry, client = await _setup(hass, {"mac_wifi": WIFI_MAC})

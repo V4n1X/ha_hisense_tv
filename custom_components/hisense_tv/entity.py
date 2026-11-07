@@ -155,10 +155,12 @@ class HisenseTvEntity(CoordinatorEntity[HisenseTvCoordinator]):
         except NotConnected as err:
             raise tv_not_connected_error(err) from err
         if key == KEY_COMMANDS["mute"]:
-            # The TV sends no mute feedback, so every path that toggles it
-            # (media player, remote, button) keeps the tracked state in step.
+            # MQTT carries no mute feedback: every path that toggles it (media
+            # player, remote, button) flips the tracked state at once, and the
+            # DLNA renderer confirms the TV's real state a moment later.
             self._tv_state.toggle_mute()
             self.coordinator.async_update_listeners()
+            self.coordinator.async_schedule_mute_check()
 
     def _tv_is_on(self) -> bool:
         """Connected, not shutting down and not in fake sleep (screen off)."""

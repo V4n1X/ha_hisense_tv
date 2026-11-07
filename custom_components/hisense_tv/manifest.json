@@ -1,6 +1,7 @@
 {
   "domain": "hisense_tv",
   "name": "Hisense TV",
+  "after_dependencies": ["ssdp"],
   "categories": ["media_entertainment.tv_streaming"],
   "codeowners": ["@V4n1X"],
   "config_flow": true,

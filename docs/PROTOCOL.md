@@ -149,6 +149,21 @@ Filter: accept only devices whose modelDescription contains `mqttport=` or
 `transport_protocol=` (manufacturer alone matches non-Vidaa sets).
 Unique ID: `macWifi || macEthernet || UDN`.
 
+### 6.1 DLNA renderer (mute state)
+
+The TV is also a UPnP MediaRenderer (Hisense DLNA stack, description at
+`http://<tv>:38400/MediaServer/rendererdevicedesc.xml`). Its
+`RenderingControl:1` service reflects the TV's real audio state, which MQTT
+does not carry. The RemoteNOW app reads mute the same way
+(`IDLNA.getRenderMuteState`). Verified live on a 65A6101EE (MSD6886):
+
+* `GetMute` (`InstanceID 0`, `Channel Master`) answers `CurrentMute 1` while
+  muted, whether by `KEY_MUTE` over MQTT or the TV's own remote, and `0`
+  otherwise. `GetVolume` matches the MQTT volume level.
+* The service sends **no GENA events** for changes (neither a subscriber on
+  another subnet nor Home Assistant's `dlna_dmr` on the TV's subnet received
+  any), so the state has to be polled.
+
 ## 7. Wake-on-LAN
 
 `WakeupManager` sends the standard magic packet (FF×6 + MAC×16)

@@ -65,10 +65,14 @@ def _entry(*, data: dict | None = None, options: dict | None = None):
         coordinator=SimpleNamespace(
             async_add_listener=lambda *_a, **_k: None,
             refreshes=[],
+            mute_checks=[],
         ),
     )
     runtime.coordinator.async_update_listeners = lambda: (
         runtime.coordinator.refreshes.append(True)
+    )
+    runtime.coordinator.async_schedule_mute_check = lambda: (
+        runtime.coordinator.mute_checks.append(True)
     )
     entry = SimpleNamespace(
         entry_id="entry-1",
@@ -267,6 +271,8 @@ async def test_mute_state_is_tracked_across_every_toggle_path():
     await player.async_mute_volume(False)
     assert client.keys == ["KEY_MUTE", "KEY_MUTE"]
     assert player.coordinator.refreshes == [True, True]
+    # Each toggle asks the DLNA renderer for the TV's real state afterwards.
+    assert player.coordinator.mute_checks == [True, True]
 
 
 # ---------------------------------------------------------------------------
