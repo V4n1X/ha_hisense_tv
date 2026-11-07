@@ -1,39 +1,28 @@
-# Release Notes — v1.6.4
+# Release Notes — v1.6.5
 
-State fixes found by testing against a live TV (65A6101EE): the volume sensor
-follows a volume change from Home Assistant at once, mute works reliably, and
-the device page shows the real firmware version. Updating is recommended.
+The media player now shows the TV's real mute state, including a mute from the
+TV's own remote. Updating is recommended.
 
-## 🐛 Fixes
+## ✨ Mute state from the TV
 
-- **Volume sensor updates at once when the volume is set from Home
-  Assistant.** The TV confirms a new level within milliseconds, but the
-  integration had already stored the value for the media player and dropped
-  the confirmation as "no change", so the sensor waited for the next poll (up
-  to the poll interval). All entities now update immediately (measured live:
-  190 ms).
-- **Mute no longer toggles the wrong way.** The TV never reports its mute
-  state, neither on its own nor when asked. With the state unknown,
-  *unmute* sent the mute toggle and muted a TV nobody had muted. The
-  integration now tracks the state it switched to itself, counts unknown as
-  unmuted, and shows it on the media player. Every mute toggle counts,
-  whether it comes from the media player, the remote entity or a button.
-- **The device shows the real firmware version.** The TV's `appversion`
-  answer is a millisecond timestamp (`1794021425030`), which replaced the
-  firmware version on the device page. The firmware now comes from the
-  capability answer (`softwareVersion`, e.g. `V0001.01.00a.P0219`) and is
-  stored with the entry, so it stays correct while the TV is off.
-- The capability answer of newer firmware names the brand `vendorBrand`; it is
-  read now too.
+- **The mute state is read from the TV.** MQTT never carries it, but the TV's
+  DLNA renderer does: its `RenderingControl` service answers `GetMute` with the
+  real state, for a mute from Home Assistant and from the TV's own remote alike
+  (verified live on a 65A6101EE). The RemoteNOW app reads it the same way.
+- **When it updates:** with every poll (the polling interval in the options),
+  and about one second after a mute from Home Assistant. The TV sends no DLNA
+  events for mute changes, so a mute from the TV's remote shows up with the
+  next poll.
+- The renderer's address comes from Home Assistant's SSDP cache, with the fixed
+  address of Hisense's DLNA stack as the fallback. If the renderer cannot be
+  reached, the integration keeps tracking the mute toggles it sends itself, as
+  in v1.6.4.
 
 ## 📝 Documentation
 
-- `docs/PROTOCOL.md`: the live findings on volume, mute, `capability` and
-  `appversion`.
-- README troubleshooting: what to do when the mute state drifts after using
-  the TV's own remote. The outdated note that sensors update 1–2 s after a
-  command is gone; volume and source changes arrive within about 100–200 ms.
+- `docs/PROTOCOL.md` documents the DLNA renderer and the missing events.
+- The README troubleshooting entry on mute now explains the poll-based update.
 
 ## 🔖 All changes
 
-See the [commit history](https://github.com/V4n1X/ha_hisense_tv/compare/v1.6.3...v1.6.4) for the complete list.
+See the [commit history](https://github.com/V4n1X/ha_hisense_tv/compare/v1.6.4...v1.6.5) for the complete list.
