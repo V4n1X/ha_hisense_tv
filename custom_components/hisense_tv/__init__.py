@@ -171,13 +171,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: HisenseConfigEntry) -> b
             changed = True
             # Persist the chip platform so hw_version survives HA restarts
             # (and fresh registry devices) even when the TV is off.
-            if (
-                payload.chip_platform
-                and entry.data.get(CONF_CHIP_PLATFORM) != payload.chip_platform
-            ):
+            # Same for the firmware version: the capability answer carries the
+            # current one, the SSDP description only the one seen at setup.
+            persisted = {
+                key: value
+                for key, value in (
+                    (CONF_CHIP_PLATFORM, payload.chip_platform),
+                    (CONF_TV_VERSION, payload.software_version),
+                )
+                if value and entry.data.get(key) != value
+            }
+            if persisted:
                 hass.config_entries.async_update_entry(
-                    entry,
-                    data={**entry.data, CONF_CHIP_PLATFORM: payload.chip_platform},
+                    entry, data={**entry.data, **persisted}
                 )
             _refresh_device_metadata(hass, entry)
         elif name == DISPATCH_APP_VERSION and payload:
@@ -300,12 +306,14 @@ def _refresh_device_metadata(hass: HomeAssistant, entry: HisenseConfigEntry) -> 
     if device is None:
         return
     updates: dict[str, str] = {}
-    if runtime.state.app_version:
-        updates["sw_version"] = str(runtime.state.app_version)
+    cap = runtime.state.capability
+    # Not the appversion answer: verified live it is a millisecond timestamp
+    # ("1794021425030"), not a firmware version.
+    if cap is not None and cap.software_version:
+        updates["sw_version"] = cap.software_version
     elif entry.data.get(CONF_TV_VERSION):
         updates["sw_version"] = str(entry.data[CONF_TV_VERSION])
 
-    cap = runtime.state.capability
     if cap is not None:
         if cap.chip_platform:
             updates["hw_version"] = f"chip {cap.chip_platform}"

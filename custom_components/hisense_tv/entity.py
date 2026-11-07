@@ -154,6 +154,11 @@ class HisenseTvEntity(CoordinatorEntity[HisenseTvCoordinator]):
             await self._client.send_key(key)
         except NotConnected as err:
             raise tv_not_connected_error(err) from err
+        if key == KEY_COMMANDS["mute"]:
+            # The TV sends no mute feedback, so every path that toggles it
+            # (media player, remote, button) keeps the tracked state in step.
+            self._tv_state.toggle_mute()
+            self.coordinator.async_update_listeners()
 
     def _tv_is_on(self) -> bool:
         """Connected, not shutting down and not in fake sleep (screen off)."""

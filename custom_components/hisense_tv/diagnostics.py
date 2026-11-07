@@ -32,6 +32,7 @@ async def async_get_config_entry_diagnostics(
             "device_id": cap.device_id,
             "feature_code": cap.feature_code,
             "chip_platform": cap.chip_platform,
+            "software_version": cap.software_version,
             "fake_sleep": cap.fake_sleep,
             "audio_capture_supported": cap.audio_capture_supported,
             "screen_capture_supported": cap.screen_capture_supported,

@@ -114,7 +114,9 @@ def registry(monkeypatch) -> FakeDeviceRegistry:
 
 
 def _runtime(
-    app_version: str | None = None, chip_platform: str | None = None
+    app_version: str | None = None,
+    chip_platform: str | None = None,
+    software_version: str = "",
 ) -> SimpleNamespace:
     """Runtime data with a TvState; chip_platform=None means no capability yet."""
     state = TvState()
@@ -122,6 +124,7 @@ def _runtime(
     if chip_platform is not None:
         state.capability = CapabilityInfo()
         state.capability.chip_platform = chip_platform
+        state.capability.software_version = software_version
     return SimpleNamespace(state=state)
 
 
@@ -228,10 +231,21 @@ def test_refresh_unknown_device_is_a_noop(registry):
     ("entry_data", "runtime", "expected"),
     [
         pytest.param(
-            {},
-            _runtime(app_version="V1", chip_platform="mtk"),
-            {"sw_version": "V1", "hw_version": "chip mtk"},
-            id="push-feedback-wins",
+            {CONF_TV_VERSION: TV_VERSION},
+            _runtime(
+                app_version="1794021425030",
+                chip_platform="mtk",
+                software_version="V0001.01.00a.P0219",
+            ),
+            {"sw_version": "V0001.01.00a.P0219", "hw_version": "chip mtk"},
+            id="capability-software-version-wins",
+        ),
+        pytest.param(
+            {CONF_TV_VERSION: TV_VERSION},
+            _runtime(app_version="1794021425030", chip_platform="mtk"),
+            {"sw_version": TV_VERSION, "hw_version": "chip mtk"},
+            # Verified live: appversion answers a timestamp, never a version.
+            id="appversion-is-never-the-firmware",
         ),
         pytest.param(
             {CONF_TV_VERSION: TV_VERSION},

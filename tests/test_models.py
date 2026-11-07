@@ -120,6 +120,18 @@ def test_reconnect_clears_the_sleep_flag():
     assert state.going_to_sleep is False
 
 
+def test_capability_reads_the_msd6886_field_names():
+    """The capability field names a 65A6101EE (MSD6886) sends live are read."""
+    cap = CapabilityInfo.parse(
+        '{"pvr":0,"boardVersion":"MSD6886","softwareVersion":"V0001.01.00a.P0219",'
+        '"vendorBrand":"his","chipplatform":"mstar6886"}'
+    )
+
+    assert cap.software_version == "V0001.01.00a.P0219"
+    assert cap.brand == "his"
+    assert cap.chip_platform == "mstar6886"
+
+
 def test_lost_connection_forgets_fake_sleep():
     """A TV whose broker went away boots with the screen on, not in fake sleep."""
     state = TvState()

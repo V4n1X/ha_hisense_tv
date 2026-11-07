@@ -27,6 +27,7 @@ WIFI_MAC = "AA:BB:CC:DD:EE:FF"
 data_mod = importlib.import_module("custom_components.hisense_tv.data")
 discovery = importlib.import_module("custom_components.hisense_tv.discovery")
 const = importlib.import_module("custom_components.hisense_tv.const")
+models = importlib.import_module("custom_components.hisense_tv.models")
 
 
 class FakeClient(data_mod.HisenseTvClient):
@@ -136,14 +137,28 @@ async def test_pairing_lost_starts_a_single_reauth_flow(hass, setup_env):
     assert not [key for key in issues if key[0] == DOMAIN]
 
 
-async def test_app_version_feedback_patches_the_device(hass, setup_env):
-    """The TV's firmware version lands in the device registry when it arrives."""
-    entry, client = await _setup(hass, {"mac_wifi": WIFI_MAC})
+async def test_capability_feedback_patches_and_persists_the_firmware(hass, setup_env):
+    """The firmware comes from capability.softwareVersion, never appversion.
 
-    client.on_event(const.DISPATCH_APP_VERSION, "V0000.01.00N.Q0115")
+    Verified live (65A6101EE): appversion answers a millisecond timestamp.
+    """
+    entry, client = await _setup(
+        hass, {"mac_wifi": WIFI_MAC, "tv_version": "V0000.01.00a.P0219"}
+    )
+
+    client.on_event(const.DISPATCH_APP_VERSION, "1794021425030")
+    client.on_event(
+        const.DISPATCH_CAPABILITY,
+        models.CapabilityInfo.parse(
+            '{"softwareVersion":"V0001.01.00a.P0219","chipplatform":"mstar6886"}'
+        ),
+    )
 
     (device,) = _devices(hass, entry)
-    assert device.sw_version == "V0000.01.00N.Q0115"
+    assert device.sw_version == "V0001.01.00a.P0219"
+    assert device.hw_version == "chip mstar6886"
+    # Persisted, so the device keeps it while the TV is off at the next start.
+    assert entry.data["tv_version"] == "V0001.01.00a.P0219"
 
 
 async def test_learning_the_mac_keeps_a_single_device(hass, setup_env):

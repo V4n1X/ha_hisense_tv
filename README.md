@@ -142,7 +142,7 @@ data:
 |---|---|
 | Entities `unavailable` although the TV shows a picture | The broker is only reachable in "fast" standby; check eco standby |
 | Powering on via automation fails | Enable *Network Standby / Quick Start* on the TV, otherwise Wake-on-LAN is impossible |
-| Volume/source sensor updates 1–2 s after a command | Intentional: values are **live TV pushes**, not optimistic guesses (see [`docs/PROTOCOL.md`](docs/PROTOCOL.md)) |
+| Mute state wrong after using the TV's own remote | The TV never reports its mute state, so Home Assistant shows the state it last switched to. Press mute on the TV's remote once more so the TV matches Home Assistant again. After the TV was switched off, Home Assistant treats it as unmuted again (see [`docs/PROTOCOL.md`](docs/PROTOCOL.md)) |
 | No volume/state values | Some models only push after the first `getvolume` poll → reduce the polling interval in the options |
 | Unresponsive after a TV update | A firmware update can reset the pairing → wait for the Reauth notification and re-enter the PIN |
 

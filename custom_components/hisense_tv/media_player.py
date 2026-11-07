@@ -123,9 +123,11 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
             await self._client.set_volume(level)
         except NotConnected as err:
             raise tv_not_connected_error(err) from err
-        # Optimistic echo protection handled by state.apply_volume dedupe.
+        # Optimistic echo. The TV confirms within milliseconds, but apply_volume
+        # dedupes that echo, so every entity of the shared state (the volume
+        # sensor too) has to be refreshed here, not just the media player.
         self._tv_state.volume_level = level
-        self.async_write_ha_state()
+        self.coordinator.async_update_listeners()
 
     async def async_volume_up(self) -> None:
         """Send the volume-up key."""
@@ -138,10 +140,11 @@ class HisenseTvMediaPlayer(HisenseTvEntity, MediaPlayerEntity):
     async def async_mute_volume(self, mute: bool) -> None:
         """Reach the requested mute state with the protocol's toggle key.
 
-        The toggle is skipped when the TV already reports the requested
-        state; with an unknown state it is sent once.
+        The TV never reports its mute state (verified live), so the state is
+        the one Home Assistant last toggled to; unknown counts as unmuted, so
+        unmuting a TV nobody muted does not mute it.
         """
-        if self._tv_state.muted is not None and self._tv_state.muted == mute:
+        if bool(self._tv_state.muted) == mute:
             return
         await self._send_key(KEY_COMMANDS["mute"])
 

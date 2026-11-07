@@ -207,6 +207,7 @@ class CapabilityInfo:
     device_id: str = ""
     feature_code: str = ""
     chip_platform: str = ""
+    software_version: str = ""
     fake_sleep: int = 0
     fake_sleep_state: int = 1
     audio_capture_supported: bool = False
@@ -219,10 +220,13 @@ class CapabilityInfo:
         info = cls()
         if not isinstance(data, dict):
             return info
-        info.brand = str(data.get("brand") or "")
+        # Firmware generations name the same fields differently; vendorBrand
+        # and softwareVersion are verified live on an MSD6886 (65A6101EE).
+        info.brand = str(data.get("brand") or data.get("vendorBrand") or "")
         info.device_id = str(data.get("deviceid") or "")
         info.feature_code = str(data.get("featurecode") or "")
         info.chip_platform = str(data.get("chipplatform") or "")
+        info.software_version = str(data.get("softwareVersion") or "")
         info.fake_sleep = _to_int(data.get("fake_sleep"), 0)
         info.fake_sleep_state = _to_int(data.get("fake_sleep_state"), 1)
         info.audio_capture_supported = _to_int(data.get("audio_capture_supported")) == 1
@@ -269,6 +273,12 @@ class TvState:
         self.going_to_sleep = False
         if not connected:
             self.screen_on = None
+            # Only tracked from our own toggles; a power cycle loses it.
+            self.muted = None
+
+    def toggle_mute(self) -> None:
+        """Track a sent mute toggle (the TV never reports its mute state)."""
+        self.muted = not self.muted
 
     def apply_sleep(self) -> bool:
         """Mark the TV as switched off; True when that is news."""

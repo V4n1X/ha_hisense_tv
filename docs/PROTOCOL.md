@@ -62,15 +62,15 @@ Topic segments when split by `/`: `[3]`=clientId-or-broadcast, `[4]`=service,
 | Function | Model | Notes |
 |---|---|---|
 | `/state` | `{statetype, sourceid?, sourcename?, displayname?, is_signal?, is_lock?, hotel_mode?}` | statetype ∈ `sourceswitch, voicestate, livetv, mediadmp, tshift, app, input, mouse, fake_sleep_0, fake_sleep_1, mediadlna` |
-| `/volume` or `/volumechange` or `/getvolume` | `{volume_type, volume_value}` | type 0/1 = level 0-100; type 2 = mute flag (value 1 muted). Firmware-dependent naming — subscribe broadly |
+| `/volume` or `/volumechange` or `/getvolume` | `{volume_type, volume_value}` | type 0/1 = level 0-100; type 2 = mute flag (value 1 muted). Firmware-dependent naming — subscribe broadly. Verified live (MSD6886): level changes are broadcast within ~50 ms, from the remote and from `changevolume` alike, but `KEY_MUTE` is never reported (no type 2, not even in the `getvolume` answer while muted), and volume keys do nothing while muted |
 | `/data/sourcelist` | array of `{sourceid, sourcename, displayname, is_signal, is_lock, hotel_mode}` | response to `sourcelist` |
 | `/data/applist` | app list JSON | response to `applist` |
 | `/authentication` | – | **TV requests pairing** (triggers PIN display on the TV screen) |
 | `/authenticationcode` | `{result: 0|1, info}` | result of a PIN submission. `{"result":1,"info":""}` = accepted; `{"result":100,"info":"Wrong authNum!!"}` = wrong or expired code |
 | `/authenticationcodetoast` | – | **NOT a success signal!** App string `authen_toast` (German locale): *"Das verbundene Gerät ist besetzt, verbinden Sie ein anderes Gerät"* (= "The connected device is busy, connect a different device"). The TV sends this when the remote slot is already occupied by another client (e.g. the phone app is running). Pairing cannot proceed until that client disconnects |
 | `/authenticationcodeclose` | – | pairing dialog dismissed; also pushed by the TV itself after the code expires (~30 s) |
-| `/capability` | CapabilityTvInfo | brand, deviceid, featurecode, capability, tuner_num, fake_sleep(+state), audio/screen_capture_supported |
-| `/appversion` | version string | firmware/app enrichment |
+| `/capability` | CapabilityTvInfo | brand, deviceid, featurecode, capability, tuner_num, fake_sleep(+state), audio/screen_capture_supported. The MSD6886 (65A6101EE) sends other names: `vendorBrand`, `uniqueDeviceId`, `boardVersion`, `produceDate` and the firmware as `softwareVersion` (e.g. `V0001.01.00a.P0219`) |
+| `/appversion` | quoted string | **not** a firmware version: the MSD6886 answers a millisecond timestamp (`"1794021425030"`) |
 | `/tvsleep` | empty | broadcast on `platform_service/actions/tvsleep` the moment the TV is switched off. Verified live (2026-11, MSD6886): afterwards the TV answers no request, and the broker connection dies about a minute later |
 
 ## 5. First pairing sequence (= RemoteNOW behaviour)

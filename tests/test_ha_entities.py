@@ -62,7 +62,13 @@ def _entry(*, data: dict | None = None, options: dict | None = None):
     runtime = SimpleNamespace(
         client=client,
         state=state,
-        coordinator=SimpleNamespace(async_add_listener=lambda *_a, **_k: None),
+        coordinator=SimpleNamespace(
+            async_add_listener=lambda *_a, **_k: None,
+            refreshes=[],
+        ),
+    )
+    runtime.coordinator.async_update_listeners = lambda: (
+        runtime.coordinator.refreshes.append(True)
     )
     entry = SimpleNamespace(
         entry_id="entry-1",
@@ -197,6 +203,23 @@ async def test_turn_off_sends_the_power_key():
     assert client.keys == ["KEY_POWER"]
 
 
+async def test_set_volume_refreshes_every_entity_at_once():
+    """The volume sensor must not wait for the next poll.
+
+    Verified live: the TV confirms a changevolume within 5 ms, but that echo
+    equals the optimistic value and is deduped, so the set itself has to
+    wake all listeners of the shared state.
+    """
+    player, client, state = _player()
+    client.connected = True
+
+    await player.async_set_volume_level(0.06)
+
+    assert client.sent == [("changevolume", "6")]
+    assert state.volume_level == 6
+    assert player.coordinator.refreshes == [True]
+
+
 # ---------------------------------------------------------------------------
 # mute: the protocol only knows a toggle
 # ---------------------------------------------------------------------------
@@ -210,6 +233,8 @@ async def test_turn_off_sends_the_power_key():
         pytest.param(False, True, ["KEY_MUTE"], id="mute"),
         pytest.param(True, False, ["KEY_MUTE"], id="unmute"),
         pytest.param(None, True, ["KEY_MUTE"], id="unknown-state"),
+        # Unknown counts as unmuted: the toggle would mute a TV nobody muted.
+        pytest.param(None, False, [], id="unknown-state-unmute"),
     ],
 )
 async def test_mute_only_toggles_when_needed(muted, request_mute, expected):
@@ -221,6 +246,27 @@ async def test_mute_only_toggles_when_needed(muted, request_mute, expected):
     await player.async_mute_volume(request_mute)
 
     assert client.keys == expected
+
+
+async def test_mute_state_is_tracked_across_every_toggle_path():
+    """The TV never reports mute (verified live), so each sent toggle counts.
+
+    A mute key from the remote entity has to flip the tracked state too, or
+    the media player's next mute call would toggle in the wrong direction.
+    """
+    player, client, _state = _player()
+    entity = remote.HisenseTvRemote(player._entry)  # noqa: SLF001
+    client.connected = True
+
+    await player.async_mute_volume(True)
+    assert player.is_volume_muted is True
+
+    await entity.async_send_command(["mute"])
+    assert player.is_volume_muted is False
+
+    await player.async_mute_volume(False)
+    assert client.keys == ["KEY_MUTE", "KEY_MUTE"]
+    assert player.coordinator.refreshes == [True, True]
 
 
 # ---------------------------------------------------------------------------
